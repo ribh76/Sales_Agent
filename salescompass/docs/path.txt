@@ -1,0 +1,211 @@
+salescompass/
+├── README.md
+├── .gitignore
+├── .env.example
+├── docker-compose.yml
+├── render.yaml                         # optional Render deploy config
+├── docs/
+│   ├── V1_SCOPE.md
+│   ├── OUT_OF_SCOPE.md
+│   ├── API_ROUTES.md
+│   ├── DATA_MODEL.md
+│   ├── EVALUATION_PLAN.md
+│   ├── DEMO_SCRIPT.md
+│   └── CUT_IF_DYING.md
+│
+├── reference/
+│   ├── artifact-demo/
+│   │   ├── README.md
+│   │   └── sales-strategy-agent-demo.jsx
+│   └── python-app/
+│       ├── requirements.txt
+│       └── sales_strategy_agent.py
+│
+├── backend/
+│   ├── README.md
+│   ├── requirements.txt
+│   ├── pyproject.toml                  # optional but nice
+│   ├── Dockerfile
+│   ├── alembic.ini
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py
+│   │   │   ├── security.py
+│   │   │   └── errors.py
+│   │   │
+│   │   ├── db/
+│   │   │   ├── __init__.py
+│   │   │   ├── session.py
+│   │   │   ├── base.py
+│   │   │   └── init_db.py
+│   │   │
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py
+│   │   │   ├── company.py
+│   │   │   ├── icp_run.py
+│   │   │   ├── feedback.py
+│   │   │   └── evaluation.py
+│   │   │
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── user.py
+│   │   │   ├── company.py
+│   │   │   ├── analysis.py
+│   │   │   ├── feedback.py
+│   │   │   └── evaluation.py
+│   │   │
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   └── v1/
+│   │   │       ├── __init__.py
+│   │   │       ├── router.py
+│   │   │       ├── auth.py
+│   │   │       ├── companies.py
+│   │   │       ├── analyses.py
+│   │   │       ├── feedback.py
+│   │   │       ├── evaluation.py
+│   │   │       └── health.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── anthropic_client.py
+│   │   │   ├── prompts.py
+│   │   │   ├── analysis_pipeline.py
+│   │   │   ├── baseline_service.py
+│   │   │   ├── evaluation_service.py
+│   │   │   ├── demo_market_data.py
+│   │   │   └── feedback_service.py
+│   │   │
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── json_extract.py
+│   │   │   ├── slugify.py
+│   │   │   └── time.py
+│   │   │
+│   │   └── seed/
+│   │       ├── __init__.py
+│   │       ├── demo_profiles.py
+│   │       └── seed_eval_profiles.py
+│   │
+│   ├── alembic/
+│   │   ├── env.py
+│   │   ├── script.py.mako
+│   │   └── versions/
+│   │       └── 0001_initial.py
+│   │
+│   └── tests/
+│       ├── test_auth.py
+│       ├── test_companies.py
+│       ├── test_analysis_contract.py
+│       ├── test_baseline.py
+│       └── test_evaluation.py
+│
+└── frontend/
+    ├── README.md
+    ├── package.json
+    ├── next.config.ts
+    ├── tailwind.config.ts
+    ├── postcss.config.mjs
+    ├── tsconfig.json
+    ├── .env.example
+    ├── public/
+    │   └── logo.svg
+    └── src/
+        ├── app/
+        │   ├── layout.tsx
+        │   ├── globals.css
+        │   ├── page.tsx
+        │   ├── login/
+        │   │   └── page.tsx
+        │   ├── register/
+        │   │   └── page.tsx
+        │   ├── dashboard/
+        │   │   └── page.tsx
+        │   ├── analyze/
+        │   │   └── page.tsx
+        │   ├── results/
+        │   │   └── [runId]/
+        │   │       └── page.tsx
+        │   ├── evaluation/
+        │   │   └── page.tsx
+        │   └── demo/
+        │       └── page.tsx
+        │
+        ├── components/
+        │   ├── layout/
+        │   │   ├── AppShell.tsx
+        │   │   ├── Navbar.tsx
+        │   │   ├── Sidebar.tsx
+        │   │   └── PageHeader.tsx
+        │   │
+        │   ├── auth/
+        │   │   ├── LoginForm.tsx
+        │   │   ├── RegisterForm.tsx
+        │   │   └── ProtectedRoute.tsx
+        │   │
+        │   ├── analyze/
+        │   │   ├── AnalyzeForm.tsx
+        │   │   ├── CompanyModeToggle.tsx
+        │   │   ├── HistoryFields.tsx
+        │   │   ├── NoHistoryFields.tsx
+        │   │   ├── FormSection.tsx
+        │   │   └── SubmitAnalysisButton.tsx
+        │   │
+        │   ├── results/
+        │   │   ├── ResultsShell.tsx
+        │   │   ├── DiagnosisCard.tsx
+        │   │   ├── MarketScoresChart.tsx
+        │   │   ├── SegmentScoreCard.tsx
+        │   │   ├── ICPCard.tsx
+        │   │   ├── OutreachCard.tsx
+        │   │   ├── ConfidenceBadge.tsx
+        │   │   ├── ExternalBenchmarksCard.tsx
+        │   │   ├── HumanCheckpoint.tsx
+        │   │   ├── ActionPlanCard.tsx
+        │   │   └── MessageVariations.tsx
+        │   │
+        │   ├── evaluation/
+        │   │   ├── EvaluationProfilePicker.tsx
+        │   │   ├── BaselineVsAgent.tsx
+        │   │   ├── ConfidenceMetricCard.tsx
+        │   │   ├── HumanRatingForm.tsx
+        │   │   └── EvaluationSummary.tsx
+        │   │
+        │   └── ui/
+        │       ├── Button.tsx
+        │       ├── Card.tsx
+        │       ├── Input.tsx
+        │       ├── Textarea.tsx
+        │       ├── Select.tsx
+        │       ├── Badge.tsx
+        │       ├── Spinner.tsx
+        │       ├── EmptyState.tsx
+        │       └── ErrorMessage.tsx
+        │
+        ├── lib/
+        │   ├── api.ts
+        │   ├── auth.ts
+        │   ├── constants.ts
+        │   ├── formatters.ts
+        │   └── validators.ts
+        │
+        ├── types/
+        │   ├── auth.ts
+        │   ├── company.ts
+        │   ├── analysis.ts
+        │   └── evaluation.ts
+        │
+        ├── hooks/
+        │   ├── useAuth.ts
+        │   ├── useAnalyze.ts
+        │   ├── useAnalysisResult.ts
+        │   └── useEvaluation.ts
+        │
+        └── data/
+            ├── demoProfiles.ts
+            └── copy.ts

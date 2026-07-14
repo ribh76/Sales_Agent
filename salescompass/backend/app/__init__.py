@@ -1,0 +1,2 @@
+"""SalesCompass backend application package."""
+
