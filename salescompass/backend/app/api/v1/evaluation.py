@@ -14,8 +14,17 @@ from app.schemas.evaluation import (
     EvaluationRunRequest,
     EvaluationSummary,
 )
-from app.services.demo_market_data import get_demo_profile, get_demo_profile_metadata, list_demo_profiles
-from app.services.evaluation_service import evaluate_profile
+from app.services.demo_market_data import (
+    get_demo_profile,
+    get_demo_profile_key_by_id,
+    get_demo_profile_metadata,
+    list_demo_profiles,
+)
+from app.services.evaluation_service import (
+    evaluate_profile,
+    store_human_preference,
+    summarize_evaluation_results,
+)
 
 router = APIRouter()
 
@@ -34,6 +43,10 @@ def resolve_profile_key(profile_id: str, db: Session) -> str:
         )
         if profile is not None:
             return profile.name
+        try:
+            return get_demo_profile_key_by_id(int(profile_id))
+        except KeyError:
+            pass
     return profile_id
 
 
@@ -65,6 +78,7 @@ async def run_profile_evaluation(profile_key: str, db: Session) -> EvaluationRes
         profile_key,
         company,
         metadata["expected_confidence"],
+        metadata["thin_data_case"],
     )
     row = EvaluationResultModel(evaluation_profile_id=profile.id, **result)
     db.add(row)
@@ -96,36 +110,24 @@ async def rate_evaluation_result(
     payload: EvaluationRateRequest,
     db: Session = Depends(get_db),
 ) -> EvaluationResultModel:
+    try:
+        result = store_human_preference(
+            result_id,
+            payload.human_preference,
+            payload.notes,
+            db,
+        )
+    except KeyError:
+        raise not_found("Evaluation result not found")
     result = (
         db.query(EvaluationResultModel)
         .options(joinedload(EvaluationResultModel.evaluation_profile))
-        .filter(EvaluationResultModel.id == result_id)
+        .filter(EvaluationResultModel.id == result.id)
         .first()
     )
-    if result is None:
-        raise not_found("Evaluation result not found")
-
-    result.human_preference = payload.human_preference
-    result.notes = payload.notes
-    db.commit()
-    db.refresh(result)
     return result
 
 
 @router.get("/summary", response_model=EvaluationSummary)
 async def evaluation_summary(db: Session = Depends(get_db)) -> EvaluationSummary:
-    rows = db.query(EvaluationResultModel).all()
-    total = len(rows)
-    confidence_pass_rate = (
-        round(sum(1 for row in rows if row.confidence_pass) / total, 4) if total else None
-    )
-    human_preferences = {"baseline": 0, "agent": 0, "tie": 0}
-    for row in rows:
-        if row.human_preference in human_preferences:
-            human_preferences[row.human_preference] += 1
-
-    return EvaluationSummary(
-        total_results=total,
-        confidence_pass_rate=confidence_pass_rate,
-        human_preferences=human_preferences,
-    )
+    return EvaluationSummary.model_validate(summarize_evaluation_results(db))

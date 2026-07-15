@@ -1,5 +1,28 @@
 from app.schemas.company import CompanyCreate
 
+DEMO_MARKET_SNIPPETS: dict[str, dict[str, str]] = {
+    "manufacturing": {
+        "market_size": "Large industrial market with recurring operational pain.",
+        "sales_cycle": "Typically 30-90 days for mid-market services.",
+        "competition": "Moderate competition from consultants and software vendors.",
+    },
+    "healthcare": {
+        "market_size": "Large regulated market with persistent workflow and access pressure.",
+        "sales_cycle": "Typically 60-180 days depending on compliance and procurement needs.",
+        "competition": "High competition from vertical SaaS vendors and services firms.",
+    },
+    "logistics": {
+        "market_size": "Large operational market with recurring cost, routing, and visibility pain.",
+        "sales_cycle": "Typically 30-120 days for mid-market operations teams.",
+        "competition": "Moderate competition from point solutions, brokers, and consultants.",
+    },
+    "real estate": {
+        "market_size": "Cyclical but large market with fragmented operators and local workflows.",
+        "sales_cycle": "Typically 30-90 days for teams with clear transaction or leasing pain.",
+        "competition": "Moderate competition from brokerage tools, CRMs, and service providers.",
+    },
+}
+
 DEMO_PROFILES: dict[str, dict[str, object]] = {
     "northstar-enablement": {
         "key": "northstar-enablement",
@@ -71,6 +94,26 @@ DEMO_PROFILES: dict[str, dict[str, object]] = {
         ),
     },
 }
+
+
+def get_demo_market_snippet(segment: str) -> dict[str, str]:
+    normalized = segment.strip().lower()
+    if normalized in DEMO_MARKET_SNIPPETS:
+        return DEMO_MARKET_SNIPPETS[normalized]
+
+    for key, snippet in DEMO_MARKET_SNIPPETS.items():
+        if key in normalized or normalized in key:
+            return snippet
+
+    return {}
+
+
+def get_demo_profile_key_by_id(profile_id: int) -> str:
+    keys = list(DEMO_PROFILES)
+    index = profile_id - 1
+    if index < 0 or index >= len(keys):
+        raise KeyError(profile_id)
+    return keys[index]
 
 
 def list_demo_profiles() -> list[dict[str, object]]:
