@@ -1,8 +1,9 @@
 import json
+import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 CompanyMode = Literal["history", "no_history"]
 
@@ -25,6 +26,31 @@ COMPANY_MODEL_FIELDS = {
     "known_competitors",
     "early_leads",
 }
+
+NUMERIC_COMPANY_FIELDS = (
+    "average_ticket",
+    "margin",
+    "conversion_rate",
+    "average_sales_cycle",
+    "hypothetical_ticket",
+    "average_contract_value",
+)
+
+
+def parse_optional_number(value: Any) -> Any:
+    if value is None or isinstance(value, int | float):
+        return value
+
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+
+        match = re.search(r"-?\d+(?:\.\d+)?", normalized.replace(",", ""))
+        if match:
+            return float(match.group(0))
+
+    return value
 
 
 class CompanyBase(BaseModel):
@@ -53,6 +79,11 @@ class CompanyBase(BaseModel):
     average_contract_value: float | None = Field(default=None, ge=0)
     has_customer_history: bool | None = None
     customer_history: str | None = None
+
+    @field_validator(*NUMERIC_COMPANY_FIELDS, mode="before")
+    @classmethod
+    def normalize_numeric_strings(cls, value: Any) -> Any:
+        return parse_optional_number(value)
 
     @model_validator(mode="after")
     def normalize_legacy_fields(self) -> "CompanyBase":
@@ -103,6 +134,56 @@ class CompanyBase(BaseModel):
 
 class CompanyCreate(CompanyBase):
     pass
+
+
+class CompanyUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=255)
+    mode: CompanyMode | None = None
+    industry: str | None = Field(default=None, min_length=2, max_length=255)
+    description: str | None = Field(default=None, min_length=20)
+
+    average_ticket: float | None = Field(default=None, ge=0)
+    margin: float | None = None
+    conversion_rate: float | None = None
+    average_sales_cycle: float | None = Field(default=None, ge=0)
+    past_clients: Any | None = None
+    past_lost_deals: Any | None = None
+    loss_reasons: Any | None = None
+    current_markets: Any | None = None
+
+    problem_solved: str | None = None
+    target_user_guess: str | None = None
+    hypothetical_ticket: float | None = Field(default=None, ge=0)
+    known_competitors: Any | None = None
+    early_leads: Any | None = None
+
+    website: str | None = None
+    stage: str | None = Field(default=None, min_length=2, max_length=100)
+    average_contract_value: float | None = Field(default=None, ge=0)
+    has_customer_history: bool | None = None
+    customer_history: str | None = None
+
+    @field_validator(*NUMERIC_COMPANY_FIELDS, mode="before")
+    @classmethod
+    def normalize_numeric_strings(cls, value: Any) -> Any:
+        return parse_optional_number(value)
+
+    def to_model_dict(self) -> dict[str, Any]:
+        data = self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+        if "has_customer_history" in data and "mode" not in data:
+            data["mode"] = "history" if data["has_customer_history"] else "no_history"
+
+        if "average_contract_value" in data:
+            if data.get("mode") == "no_history":
+                data.setdefault("hypothetical_ticket", data["average_contract_value"])
+            else:
+                data.setdefault("average_ticket", data["average_contract_value"])
+
+        if "customer_history" in data and "past_clients" not in data:
+            data["past_clients"] = [data["customer_history"]]
+
+        return {key: value for key, value in data.items() if key in COMPANY_MODEL_FIELDS}
 
 
 class CompanyRead(CompanyBase):

@@ -13,8 +13,16 @@ from app.schemas.feedback import FeedbackCreate, FeedbackRead
 router = APIRouter()
 
 
+def default_rating(outcome: str | None) -> int:
+    if outcome == "won":
+        return 5
+    if outcome == "lost":
+        return 2
+    return 3
+
+
 @router.post("", response_model=FeedbackRead)
-def create_feedback(
+async def create_feedback(
     payload: FeedbackCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -22,13 +30,20 @@ def create_feedback(
     run = (
         db.query(ICPRun)
         .join(Company)
-        .filter(ICPRun.id == payload.run_id, ICPRun.user_id == current_user.id)
+        .filter(ICPRun.id == payload.icp_run_id, ICPRun.user_id == current_user.id)
         .first()
     )
     if run is None:
         raise not_found("Analysis run not found")
 
-    feedback = Feedback(**payload.model_dump())
+    feedback = Feedback(
+        run_id=payload.icp_run_id,
+        outcome=payload.outcome,
+        reason=payload.reason,
+        rating=payload.rating or default_rating(payload.outcome),
+        confidence=payload.confidence or 3,
+        notes=payload.notes or payload.reason,
+    )
     db.add(feedback)
     db.commit()
     db.refresh(feedback)
@@ -36,7 +51,7 @@ def create_feedback(
 
 
 @router.get("/{run_id}", response_model=list[FeedbackRead])
-def list_feedback(
+async def list_feedback(
     run_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

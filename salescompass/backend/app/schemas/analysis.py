@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.company import CompanyCreate, CompanyRead
+from app.schemas.company import CompanyCreate, CompanyMode, CompanyRead
 
 
 class SegmentScore(BaseModel):
@@ -36,13 +36,33 @@ class AnalysisResult(BaseModel):
 
 
 class AnalysisCreate(BaseModel):
-    company: CompanyCreate
+    company: CompanyCreate | None = None
+    company_id: int | None = None
+    mode: CompanyMode | None = None
+    input: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def require_analysis_input(self) -> "AnalysisCreate":
+        if self.company is None and self.company_id is None and self.input is None:
+            raise ValueError("Provide either company, company_id, or input")
+        return self
+
+
+class AnalysisRefineRequest(BaseModel):
+    notes: str = Field(min_length=1, max_length=4000)
+    input: dict[str, Any] | None = None
+
+
+class ActionPlanResponse(BaseModel):
+    run_id: int
+    action_plan: dict[str, Any] | list[Any]
 
 
 class ICPRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    run_id: int
     user_id: int
     company_id: int
     status: str

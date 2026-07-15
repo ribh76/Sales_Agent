@@ -11,6 +11,8 @@ class Feedback(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     run_id = Column(Integer, ForeignKey("icp_runs.id"), nullable=False, index=True)
+    outcome = Column(Text, nullable=True)
+    reason = Column(Text, nullable=True)
     rating = Column(Integer, nullable=False)
     confidence = Column(Integer, nullable=False)
     notes = Column(Text, nullable=True)
@@ -18,3 +20,6 @@ class Feedback(Base):
 
     run = relationship("ICPRun", back_populates="feedback")
 
+    @property
+    def icp_run_id(self) -> int:
+        return self.run_id

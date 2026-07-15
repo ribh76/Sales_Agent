@@ -1,5 +1,7 @@
 from pydantic import AliasChoices, BaseModel, EmailStr, Field
 
+from app.schemas.user import UserRead
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -19,3 +21,4 @@ class LoginRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: UserRead | None = None

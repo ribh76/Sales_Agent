@@ -32,6 +32,10 @@ class ICPRun(Base):
     feedback = relationship("Feedback", back_populates="run", cascade="all, delete-orphan")
 
     @property
+    def run_id(self) -> int:
+        return self.id
+
+    @property
     def result(self) -> dict:
         return self.agent_output
 
