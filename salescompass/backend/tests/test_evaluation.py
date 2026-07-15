@@ -11,21 +11,21 @@ def test_evaluation_scores_agent() -> None:
     company = get_demo_profile("northstar-enablement")
     result = evaluate_profile("northstar-enablement", company)
     assert result["confidence_pass"] is True
-    assert "recommended_icp" in result["agent_output"]
+    assert result["agent_output"]["icp"]["profile"]
 
 
 def test_run_evaluation_profile_uses_seeded_profile_id() -> None:
     result = run_evaluation_profile(1)
 
     assert result["baseline_input"]["segment"]
-    assert result["agent_output"]["recommended_icp"]
+    assert result["agent_output"]["icp"]["profile"]
     assert result["human_preference"] is None
 
 
 def test_check_confidence_accounts_for_thin_data() -> None:
-    assert check_confidence({"confidence": 82}, "medium", thin_data_case=True) is True
+    assert check_confidence({"icp": {"confidence": "high"}}, "medium", thin_data_case=True) is True
     assert check_confidence({"confidence": 95}, "medium", thin_data_case=True) is False
-    assert check_confidence({"confidence": 78}, "high", thin_data_case=False) is True
+    assert check_confidence({"icp": {"confidence": "high"}}, "high", thin_data_case=False) is True
 
 
 def test_summarize_evaluation_results_counts_preferences() -> None:

@@ -13,6 +13,6 @@ def test_analysis_returns_ranked_segments() -> None:
         customer_history="Wins with revenue teams at scaling SaaS companies.",
     )
     result = run_icp_analysis(company, use_llm=False)
-    assert result.market_scores[0].score >= result.market_scores[-1].score
-    assert result.recommended_icp
-
+    assert result.markets[0].total >= result.markets[-1].total
+    assert result.icp.profile
+    assert result.icp.confidence in {"low", "medium", "high"}

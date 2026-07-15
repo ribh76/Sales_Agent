@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.company import CompanyCreate, CompanyMode, CompanyRead
 
@@ -22,17 +22,47 @@ class OutreachVariation(BaseModel):
     message: str
 
 
+class MarketSegment(BaseModel):
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    name: str
+    scores: dict[str, int]
+    total: int | None = Field(default=None, ge=1, le=10)
+    rationale: str = ""
+
+    @field_validator("scores")
+    @classmethod
+    def require_scores_between_one_and_ten(cls, value: dict[str, int]) -> dict[str, int]:
+        if not value:
+            raise ValueError("market scores are required")
+        for score_name, score in value.items():
+            if isinstance(score, bool) or not isinstance(score, int) or not 1 <= score <= 10:
+                raise ValueError(f"{score_name} must be an integer from 1 to 10")
+        return value
+
+
+class ICPOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    confidence: Literal["low", "medium", "high"]
+
+
+class ApproachOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sample_message: str = Field(min_length=1)
+
+
 class AnalysisResult(BaseModel):
-    diagnosis: str
-    recommended_icp: str
-    confidence: int = Field(ge=0, le=100)
-    market_scores: list[SegmentScore]
-    disqualifiers: list[str]
-    external_benchmarks: list[str]
-    action_plan: list[str]
-    outreach: list[OutreachVariation]
-    human_checkpoint: str
-    assumptions: list[str]
+    model_config = ConfigDict(extra="forbid")
+
+    diagnosis: str = Field(min_length=1)
+    external_benchmarks: list[Any]
+    markets: list[MarketSegment] = Field(max_length=3)
+    icp: ICPOutput
+    approach: ApproachOutput
+    hypotheses_to_validate: list[str]
+    questions_for_human: list[str]
 
 
 class AnalysisCreate(BaseModel):

@@ -19,6 +19,7 @@ from app.schemas.analysis import (
 from app.schemas.company import COMPANY_MODEL_FIELDS, CompanyCreate
 from app.schemas.feedback import FeedbackRead
 from app.services.analysis_pipeline import (
+    AgentOutputValidationError,
     generate_action_plan as generate_ai_action_plan,
     generate_baseline,
     refine_analysis as refine_ai_analysis,
@@ -119,6 +120,14 @@ async def create_analysis(
 
     try:
         analysis = await run_in_threadpool(run_full_analysis, input_snapshot, company_input.mode)
+    except AgentOutputValidationError as exc:
+        run.status = "failed"
+        run.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Analysis output failed validation",
+        ) from exc
     except Exception as exc:
         run.status = "failed"
         run.error_message = str(exc)
@@ -132,7 +141,7 @@ async def create_analysis(
     run.status = "completed"
     run.agent_output = result_data
     run.baseline_output = analysis["baseline_output"]
-    run.action_plan = result_data.get("action_plan")
+    run.action_plan = result_data.get("approach")
 
     db.commit()
     db.refresh(run)
@@ -192,12 +201,21 @@ async def refine_analysis(
 
     company_input = validate_company_input(data)
     company_payload = company_input.model_dump(mode="json")
-    result_data = await run_in_threadpool(
-        refine_ai_analysis,
-        company_payload,
-        run.agent_output,
-        payload.notes,
-    )
+    try:
+        result_data = await run_in_threadpool(
+            refine_ai_analysis,
+            company_payload,
+            run.agent_output,
+            payload.notes,
+        )
+    except AgentOutputValidationError as exc:
+        run.status = "failed"
+        run.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Analysis output failed validation",
+        ) from exc
     baseline = await run_in_threadpool(generate_baseline, company_payload, company_input.mode)
 
     run.status = "completed"
@@ -205,7 +223,7 @@ async def refine_analysis(
     run.input_snapshot = company_input.model_dump(mode="json")
     run.agent_output = result_data
     run.baseline_output = baseline
-    run.action_plan = result_data.get("action_plan")
+    run.action_plan = result_data.get("approach")
     run.refinement_notes = payload.notes
     run.error_message = None
 

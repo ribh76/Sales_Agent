@@ -2,6 +2,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.schemas.company import CompanyCreate
+from app.services.demo_market_data import build_demo_market_context
 from app.services.prompts import SYSTEM_PROMPT, build_icp_prompt
 from app.utils.json_extract import extract_json_object
 
@@ -64,5 +65,20 @@ class AnthropicICPClient:
         return bool(settings.anthropic_api_key)
 
     def analyze(self, company: CompanyCreate) -> dict[str, Any] | None:
-        result = call_claude_json(build_icp_prompt(company))
+        use_web_search = company.mode == "history"
+        result = call_claude_json(
+            build_icp_prompt(company, use_web_search=use_web_search),
+            use_web_search=use_web_search,
+        )
+        if result or not use_web_search:
+            return result or None
+
+        result = call_claude_json(
+            build_icp_prompt(
+                company,
+                market_context=build_demo_market_context(company),
+                use_web_search=False,
+            ),
+            use_web_search=False,
+        )
         return result or None

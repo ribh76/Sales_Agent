@@ -108,6 +108,74 @@ def get_demo_market_snippet(segment: str) -> dict[str, str]:
     return {}
 
 
+def build_demo_market_context(company: CompanyCreate) -> dict[str, object]:
+    segments = []
+    for segment in _candidate_segments(company):
+        snippet = get_demo_market_snippet(segment)
+        if snippet:
+            normalized = _normalize_demo_segment(segment)
+            if normalized not in {item["segment"] for item in segments}:
+                segments.append({"segment": normalized, **snippet})
+
+    if not segments:
+        segments.append(
+            {
+                "segment": "general",
+                "market_size": "Use a narrow, testable market definition until stronger evidence is available.",
+                "sales_cycle": "Assume a short validation cycle before committing to a scaled sales motion.",
+                "competition": "Validate alternatives directly with prospects before positioning against competitors.",
+            }
+        )
+
+    return {
+        "source": "demo_market_data",
+        "segments": segments[:3],
+    }
+
+
+def _candidate_segments(company: CompanyCreate) -> list[str]:
+    values = [
+        company.industry,
+        company.description,
+        company.current_markets,
+        company.early_leads,
+        company.known_competitors,
+        company.problem_solved,
+        company.target_user_guess,
+    ]
+    candidates: list[str] = []
+    for value in values:
+        candidates.extend(_flatten_market_values(value))
+    return candidates
+
+
+def _flatten_market_values(value: object) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, dict):
+        items: list[str] = []
+        for nested_value in value.values():
+            items.extend(_flatten_market_values(nested_value))
+        return items
+
+    if isinstance(value, list | tuple | set):
+        items = []
+        for nested_value in value:
+            items.extend(_flatten_market_values(nested_value))
+        return items
+
+    return [str(value)]
+
+
+def _normalize_demo_segment(segment: str) -> str:
+    normalized = segment.strip().lower()
+    for key in DEMO_MARKET_SNIPPETS:
+        if key in normalized or normalized in key:
+            return key
+    return normalized
+
+
 def get_demo_profile_key_by_id(profile_id: int) -> str:
     keys = list(DEMO_PROFILES)
     index = profile_id - 1

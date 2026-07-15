@@ -5,15 +5,21 @@ from typing import Any, Iterable
 
 from pydantic import ValidationError
 
-from app.schemas.analysis import AnalysisResult, OutreachVariation, SegmentScore
+from app.core.config import settings
+from app.schemas.analysis import AnalysisResult, SegmentScore
 from app.schemas.company import CompanyCreate
 from app.services.anthropic_client import call_claude_json
 from app.services.baseline_service import build_baseline
+from app.services.demo_market_data import build_demo_market_context
 from app.services.prompts import (
     build_action_plan_prompt,
     build_analysis_prompt,
     build_refine_prompt,
 )
+
+
+class AgentOutputValidationError(RuntimeError):
+    """Raised when the LLM cannot produce the required agent JSON contract."""
 
 
 @dataclass(frozen=True)
@@ -64,9 +70,27 @@ SEGMENTS: tuple[SegmentTemplate, ...] = (
 
 def run_full_analysis(company_input: dict[str, Any], mode: str) -> dict[str, Any]:
     company = _company_from_input(company_input, mode)
-    prompt = build_analysis_prompt(company.model_dump(mode="json"), company.has_customer_history)
-    raw_output = call_claude_json(prompt)
-    agent_output = validate_agent_output(raw_output, company)
+    use_web_search = _should_use_web_search(company)
+    demo_market_context = build_demo_market_context(company)
+    company_payload = company.model_dump(mode="json")
+    prompt = build_analysis_prompt(
+        company_payload,
+        company.has_customer_history,
+        use_web_search=use_web_search,
+        market_context=None if use_web_search else demo_market_context,
+    )
+    fallback_prompt = build_analysis_prompt(
+        company_payload,
+        company.has_customer_history,
+        market_context=demo_market_context,
+        use_web_search=False,
+    )
+    agent_output = generate_agent_output(
+        prompt,
+        company,
+        use_web_search=use_web_search,
+        fallback_prompt=fallback_prompt,
+    )
     baseline_output = generate_baseline(company.model_dump(mode="json"), company.mode)
 
     return {
@@ -83,8 +107,9 @@ def refine_analysis(
 ) -> dict[str, Any]:
     company = _company_from_input(company_input, _optional_mode(company_input))
     prompt = build_refine_prompt(company.model_dump(mode="json"), previous_output, adjustment)
-    raw_output = call_claude_json(prompt)
-    return validate_agent_output(raw_output or previous_output, company)
+    if not settings.anthropic_api_key:
+        return validate_agent_output(previous_output, company)
+    return generate_agent_output(prompt, company, use_web_search=_should_use_web_search(company))
 
 
 def generate_action_plan(
@@ -96,7 +121,14 @@ def generate_action_plan(
     if action_plan:
         return action_plan
 
-    next_steps = agent_output.get("action_plan") or []
+    hypotheses = agent_output.get("hypotheses_to_validate") or []
+    questions = agent_output.get("questions_for_human") or []
+    sample_message = (agent_output.get("approach") or {}).get("sample_message")
+    next_steps = [
+        f"Validate hypothesis: {hypothesis}" for hypothesis in hypotheses[:3]
+    ] or ["Review the ICP recommendation and choose the first validation segment."]
+    if sample_message:
+        next_steps.append("Run the sample message with a small target account list.")
     return {
         "summary": "Execution plan generated from the latest ICP recommendation.",
         "next_steps": [
@@ -108,15 +140,60 @@ def generate_action_plan(
             }
             for step in next_steps
         ],
-        "risks": agent_output.get("disqualifiers") or [],
+        "risks": questions,
     }
+
+
+def generate_agent_output(
+    prompt: str,
+    company: CompanyCreate,
+    use_web_search: bool = False,
+    fallback_prompt: str | None = None,
+) -> dict[str, Any]:
+    raw_output = call_claude_json(prompt, use_web_search=use_web_search)
+    if use_web_search and not raw_output:
+        return _generate_from_demo_market_fallback(fallback_prompt or prompt, company)
+
+    if not raw_output and not settings.anthropic_api_key:
+        return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
+
+    try:
+        return validate_agent_output(raw_output, company)
+    except AgentOutputValidationError as first_error:
+        retry_output = call_claude_json(prompt, use_web_search=use_web_search)
+        if use_web_search and not retry_output:
+            return _generate_from_demo_market_fallback(fallback_prompt or prompt, company)
+
+        try:
+            return validate_agent_output(retry_output, company)
+        except AgentOutputValidationError as second_error:
+            raise AgentOutputValidationError(
+                f"Agent output failed validation after retry: {second_error}"
+            ) from first_error
 
 
 def validate_agent_output(raw_output: dict[str, Any], company: CompanyCreate) -> dict[str, Any]:
     try:
         return AnalysisResult.model_validate(raw_output).model_dump(mode="json")
-    except (TypeError, ValidationError, ValueError):
-        return _deterministic_analysis(company).model_dump(mode="json")
+    except (TypeError, ValidationError, ValueError) as exc:
+        raise AgentOutputValidationError(str(exc)) from exc
+
+
+def _generate_from_demo_market_fallback(prompt: str, company: CompanyCreate) -> dict[str, Any]:
+    raw_output = call_claude_json(prompt, use_web_search=False)
+    if not raw_output and not settings.anthropic_api_key:
+        return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
+
+    try:
+        return validate_agent_output(raw_output, company)
+    except AgentOutputValidationError as first_error:
+        retry_output = call_claude_json(prompt, use_web_search=False)
+        try:
+            return validate_agent_output(retry_output, company)
+        except AgentOutputValidationError as second_error:
+            raise AgentOutputValidationError(
+                f"Agent output failed validation after demo market fallback: {second_error}"
+            ) from first_error
 
 
 def generate_baseline(company_input: dict[str, Any], mode: str) -> dict[str, object]:
@@ -131,6 +208,10 @@ def run_icp_analysis(company: CompanyCreate, use_llm: bool = True) -> AnalysisRe
     return _deterministic_analysis(company)
 
 
+def _should_use_web_search(company: CompanyCreate) -> bool:
+    return company.mode == "history"
+
+
 def _company_from_input(company_input: dict[str, Any], mode: str | None) -> CompanyCreate:
     payload = dict(company_input)
     if mode is not None:
@@ -143,67 +224,56 @@ def _optional_mode(company_input: dict[str, Any]) -> str | None:
     return str(value) if value is not None else None
 
 
-def _deterministic_analysis(company: CompanyCreate) -> AnalysisResult:
+def _deterministic_analysis(
+    company: CompanyCreate,
+    market_context: dict[str, Any] | None = None,
+) -> AnalysisResult:
     scores = _score_segments(company)
     top = scores[0]
-    confidence = _confidence(company, top.score)
+    confidence = _confidence_label(company, top.score)
     descriptor = _company_descriptor(company)
+    context = market_context or build_demo_market_context(company)
 
     return AnalysisResult(
         diagnosis=(
             f"{company.name} should narrow its first sales motion around {top.name.lower()}. "
             f"The strongest signals are {', '.join(top.evidence[:2]).lower()}."
         ),
-        recommended_icp=f"{top.name} that are actively trying to solve {descriptor}.",
-        confidence=confidence,
-        market_scores=scores,
-        disqualifiers=[
-            "No named owner for the pain or no budget path within the next two quarters.",
-            "Teams that see the problem as a nice-to-have productivity issue.",
-            "Accounts that require heavy custom implementation before value is proven.",
-        ],
-        external_benchmarks=[
-            "Prioritize segments where the pain can be measured in revenue, cost, cycle time, or risk.",
-            "A narrow ICP should name the buyer, trigger event, pain metric, and likely buying motion.",
-            "Early-stage teams should prefer fast learning loops over total addressable market breadth.",
-        ],
-        action_plan=[
-            f"Interview five prospects from {top.name.lower()} and validate the trigger event.",
-            "Rewrite the homepage hero around the sharpest quantified pain from those interviews.",
-            "Build a 25-account target list with the same trigger signal and one disqualifier check.",
-            "Run two outbound message variants and track reply quality, not just reply volume.",
-        ],
-        outreach=[
-            OutreachVariation(
-                title="Trigger-led opener",
-                channel="Email",
-                message=(
-                    f"Noticed {company.name} helps with {descriptor}. Are you seeing teams delay "
-                    "decisions because the pain is hard to quantify?"
-                ),
+        external_benchmarks=_external_benchmarks(context),
+        markets=[_market_from_score(score, context) for score in scores[:3]],
+        icp={
+            "profile": f"{top.name} that are actively trying to solve {descriptor}.",
+            "company_size": "Mid-market or focused growth teams",
+            "target_industry": company.industry,
+            "region": "Start with reachable markets from the current network",
+            "decision_maker": _decision_maker(company),
+            "main_pain": descriptor,
+            "rationale": "The top segment combines fit, urgency, reachability, and deal quality signals.",
+            "confidence": confidence,
+            "confidence_basis": "Customer history and input specificity determine confidence.",
+        },
+        approach={
+            "channel": "Email",
+            "trigger": "A measurable pain tied to a current operating priority",
+            "first_contact": _decision_maker(company),
+            "message_tone": "Specific, evidence-led, and concise",
+            "sample_message": (
+                f"Noticed {company.name} helps with {descriptor}. Are teams in your org "
+                "actively trying to quantify that pain this quarter?"
             ),
-            OutreachVariation(
-                title="Operational pain note",
-                channel="LinkedIn",
-                message=(
-                    f"For {top.name.lower()}, the costly part usually is not the task itself; "
-                    "it is the repeated handoff friction around it. Worth comparing notes?"
-                ),
-            ),
-            OutreachVariation(
-                title="Proof request",
-                channel="Call script",
-                message=(
-                    "The teams we are learning from usually have one metric they need to move "
-                    "this quarter. What would make this problem board-level instead of background noise?"
-                ),
-            ),
+            "confidence": confidence,
+            "confidence_basis": "Message should be tested against reply quality before scaling.",
+        },
+        hypotheses_to_validate=[
+            f"{top.name} has an urgent enough pain to prioritize {company.name}.",
+            "The buyer owns a metric tied to the pain and can describe the cost of inaction.",
+            "A narrow target list produces higher-quality replies than broad segment outreach.",
         ],
-        human_checkpoint=(
-            "Before scaling outreach, confirm that the buyer owns a metric tied to the pain and "
-            "can describe the cost of doing nothing."
-        ),
-        assumptions=_assumptions(company),
+        questions_for_human=[
+            "Which buyer role feels the pain most directly today?",
+            "What trigger event makes this problem urgent now?",
+            "What proof would make this ICP safe to scale beyond the first test list?",
+        ],
     )
 
 
@@ -279,6 +349,113 @@ def _confidence(company: CompanyCreate, top_score: int) -> int:
     return _clamp(confidence)
 
 
+def _confidence_label(company: CompanyCreate, top_score: int) -> str:
+    confidence = _confidence(company, top_score)
+    if confidence >= 75:
+        return "high"
+    if confidence >= 50:
+        return "medium"
+    return "low"
+
+
+def _external_benchmarks(market_context: dict[str, Any]) -> list[dict[str, str]]:
+    benchmarks = [
+        {
+            "stat": "Prioritize segments where the pain can be measured in revenue, cost, cycle time, or risk.",
+            "source": "SalesCompass ICP heuristic",
+        },
+        {
+            "stat": "A narrow ICP should name the buyer, trigger event, pain metric, and likely buying motion.",
+            "source": "SalesCompass ICP heuristic",
+        },
+    ]
+
+    for segment in _market_context_segments(market_context):
+        benchmarks.append(
+            {
+                "stat": (
+                    f"{segment['segment']}: {segment['market_size']} "
+                    f"{segment['sales_cycle']} {segment['competition']}"
+                ),
+                "source": str(market_context.get("source", "demo_market_data")),
+            }
+        )
+
+    return benchmarks[:3]
+
+
+def _market_from_score(score: SegmentScore, market_context: dict[str, Any]) -> dict[str, Any]:
+    snippet = _matching_market_context(score.name, market_context)
+    rationale = " ".join(score.evidence)
+    if snippet:
+        rationale = (
+            f"{rationale} Demo market data: {snippet['market_size']} "
+            f"{snippet['sales_cycle']} {snippet['competition']}"
+        )
+
+    return {
+        "name": score.name,
+        "scores": {
+            "size": _score_to_ten(score.score),
+            "access": _score_to_ten(score.reachability),
+            "ticket": _score_to_ten(score.deal_quality),
+            "cycle": _score_to_ten(score.urgency),
+            "competition": _score_to_ten(score.fit),
+        },
+        "total": _score_to_ten(score.score),
+        "rationale": rationale,
+    }
+
+
+def _matching_market_context(
+    market_name: str,
+    market_context: dict[str, Any],
+) -> dict[str, str] | None:
+    normalized_name = market_name.lower()
+    for segment in _market_context_segments(market_context):
+        segment_name = segment["segment"].lower()
+        if segment_name in normalized_name or normalized_name in segment_name:
+            return segment
+    segments = _market_context_segments(market_context)
+    return segments[0] if segments else None
+
+
+def _market_context_segments(market_context: dict[str, Any]) -> list[dict[str, str]]:
+    segments = market_context.get("segments")
+    if not isinstance(segments, list):
+        return []
+
+    normalized_segments = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        if {"segment", "market_size", "sales_cycle", "competition"}.issubset(segment):
+            normalized_segments.append(
+                {
+                    "segment": str(segment["segment"]),
+                    "market_size": str(segment["market_size"]),
+                    "sales_cycle": str(segment["sales_cycle"]),
+                    "competition": str(segment["competition"]),
+                }
+            )
+    return normalized_segments
+
+
+def _score_to_ten(value: int) -> int:
+    return max(1, min(10, round(value / 10)))
+
+
+def _decision_maker(company: CompanyCreate) -> str:
+    text = f"{company.industry} {company.description}".lower()
+    if "sales" in text or "pipeline" in text or "revenue" in text:
+        return "VP Sales or revenue leader"
+    if "finance" in text or "reconcile" in text:
+        return "Finance operations leader"
+    if "patient" in text or "clinic" in text or "healthcare" in text:
+        return "Operations leader"
+    return "Business owner for the target pain"
+
+
 def _company_descriptor(company: CompanyCreate) -> str:
     text = company.description.lower()
     if "pipeline" in text:
@@ -290,16 +467,6 @@ def _company_descriptor(company: CompanyCreate) -> str:
     if "workflow" in text or "automation" in text:
         return "manual workflow drag across teams"
     return "a costly operational problem with a named owner"
-
-
-def _assumptions(company: CompanyCreate) -> list[str]:
-    assumptions = [
-        "The provided company description reflects the current product focus.",
-        "The team can reach buyers directly enough to test messaging within 30 days.",
-    ]
-    if not company.has_customer_history:
-        assumptions.append("Segment choice should be treated as a hypothesis until interviews validate it.")
-    return assumptions
 
 
 def _stage_bonus(stage: str) -> int:

@@ -1,10 +1,18 @@
 from fastapi.testclient import TestClient
 
+from app.api.v1 import analyses as analyses_api
+from app.db.session import SessionLocal
 from app.main import app
+from app.models.icp_run import ICPRun
+from app.services.analysis_pipeline import AgentOutputValidationError
 
 
 def test_v1_api_routes_match_product_contract() -> None:
-    client = TestClient(app)
+    with TestClient(app) as client:
+        _assert_v1_api_routes_match_product_contract(client)
+
+
+def _assert_v1_api_routes_match_product_contract(client: TestClient) -> None:
 
     email = "v1-contract@example.com"
     password = "password123"
@@ -77,6 +85,7 @@ def test_v1_api_routes_match_product_contract() -> None:
     )
     assert analysis_response.status_code == 200
     run = analysis_response.json()
+    assert {"run_id", "status", "agent_output", "baseline_output"}.issubset(run)
     run_id = run["run_id"]
     assert run["status"] == "completed"
     assert run["agent_output"]
@@ -132,3 +141,48 @@ def test_v1_api_routes_match_product_contract() -> None:
 
     delete_response = client.delete(f"/api/v1/companies/{company_id}", headers=headers)
     assert delete_response.status_code == 204
+
+
+def test_create_analysis_returns_controlled_error_for_invalid_agent_output(monkeypatch) -> None:
+    def broken_analysis(company_input, mode):
+        raise AgentOutputValidationError("markets must contain at most three items")
+
+    monkeypatch.setattr(analyses_api, "run_full_analysis", broken_analysis)
+    with TestClient(app) as client:
+        email = "invalid-agent-output@example.com"
+        password = "password123"
+        register_response = client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "username": "invalid-agent-output", "password": password},
+        )
+        assert register_response.status_code == 200
+
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+
+        response = client.post(
+            "/api/v1/analyses",
+            headers=headers,
+            json={
+                "company": {
+                    "name": "Malformed JSON Co",
+                    "mode": "history",
+                    "industry": "Manufacturing consulting",
+                    "description": "Helps manufacturers reduce downtime.",
+                    "average_ticket": 25000,
+                    "past_clients": "mid-market manufacturers",
+                }
+            },
+        )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Analysis output failed validation"
+
+    with SessionLocal() as db:
+        run = db.query(ICPRun).order_by(ICPRun.id.desc()).first()
+        assert run.status == "failed"
+        assert run.agent_output == {}
+        assert "markets must contain" in run.error_message

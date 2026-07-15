@@ -36,7 +36,7 @@ def check_confidence(
     expected_confidence: ExpectedConfidence,
     thin_data_case: bool,
 ) -> bool:
-    confidence = _coerce_confidence(agent_output.get("confidence"))
+    confidence = _coerce_confidence(_extract_confidence(agent_output))
     if thin_data_case and confidence > 89:
         return False
 
@@ -117,10 +117,21 @@ def evaluate_profile(
 
 
 def _coerce_confidence(value: Any) -> int:
+    if isinstance(value, str):
+        confidence_map = {"low": 35, "medium": 60, "high": 80}
+        if value.lower() in confidence_map:
+            return confidence_map[value.lower()]
     try:
         return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return 0
+
+
+def _extract_confidence(agent_output: dict[str, Any]) -> Any:
+    icp = agent_output.get("icp")
+    if isinstance(icp, dict) and "confidence" in icp:
+        return icp["confidence"]
+    return agent_output.get("confidence")
 
 
 def _summarize_rows(rows: Sequence[EvaluationResultModel]) -> dict[str, object]:
@@ -141,6 +152,8 @@ def _summarize_rows(rows: Sequence[EvaluationResultModel]) -> dict[str, object]:
 
 
 def _score_outputs(baseline: dict[str, object], agent: dict[str, object]) -> dict[str, object]:
+    approach = agent.get("approach")
+    sample_message = approach.get("sample_message") if isinstance(approach, dict) else None
     return {
         "baseline": {
             "specificity": 2 if baseline.get("segment") else 1,
@@ -150,9 +163,9 @@ def _score_outputs(baseline: dict[str, object], agent: dict[str, object]) -> dic
         },
         "agent": {
             "specificity": 4,
-            "actionability": 5 if len(agent.get("action_plan", [])) >= 4 else 4,
+            "actionability": 5 if sample_message else 4,
             "evidence_quality": 4,
-            "risk_handling": 4 if agent.get("disqualifiers") else 3,
+            "risk_handling": 4 if agent.get("questions_for_human") else 3,
         },
         "summary": "The agent wins by naming a narrower segment, surfacing evidence, and producing testable next steps.",
     }
