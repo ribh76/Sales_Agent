@@ -11,6 +11,8 @@
   },
   "run": {
     "id": 9001,
+    "run_id": 9001,
+    "user_id": 9001,
     "company_id": 9001,
     "status": "completed",
     "mode": "history",
@@ -24,6 +26,91 @@
       "description": "Sales enablement software that helps revenue teams onboard reps faster, standardize discovery, and coach managers on pipeline quality.",
       "customer_history": "Best customers are 80-300 employee SaaS companies with new sales managers, ramp-time pain, and board pressure to improve conversion."
     },
+    "agent_output": {
+      "diagnosis": "Northstar Enablement should narrow its first sales motion around revenue teams at scaling B2B SaaS companies. The strongest signals are sales, revenue, enablement, pipeline, and customer history that points to manager ramp-time pain.",
+      "external_benchmarks": [
+        {
+          "stat": "Prioritize segments where the pain can be measured in revenue, cost, cycle time, or risk.",
+          "source": "SalesCompass ICP heuristic"
+        },
+        {
+          "stat": "A narrow ICP should name the buyer, trigger event, pain metric, and likely buying motion.",
+          "source": "SalesCompass ICP heuristic"
+        },
+        {
+          "stat": "Early-stage teams should prefer fast learning loops over total addressable market breadth.",
+          "source": "SalesCompass ICP heuristic"
+        }
+      ],
+      "markets": [
+        {
+          "name": "Revenue teams at scaling B2B SaaS companies",
+          "scores": {
+            "size": 9,
+            "access": 9,
+            "ticket": 8,
+            "cycle": 9,
+            "competition": 7
+          },
+          "total": 8,
+          "rationale": "Input mentions sales, revenue, enablement, and pipeline. Customer history gives usable pattern evidence, Series A mode suggests urgency to focus GTM, and contract value can support a targeted sales motion."
+        },
+        {
+          "name": "Operations leaders with measurable workflow bottlenecks",
+          "scores": {
+            "size": 8,
+            "access": 8,
+            "ticket": 8,
+            "cycle": 8,
+            "competition": 6
+          },
+          "total": 8,
+          "rationale": "The segment has operational pain and measurable workflow bottlenecks, but the buyer fit is less direct than sales leadership."
+        },
+        {
+          "name": "Finance teams under close or reconciliation pressure",
+          "scores": {
+            "size": 7,
+            "access": 7,
+            "ticket": 8,
+            "cycle": 8,
+            "competition": 6
+          },
+          "total": 7,
+          "rationale": "Finance teams can have urgent measurable pain, but this segment is less supported by Northstar's stated product and customer history."
+        }
+      ],
+      "icp": {
+        "profile": "Revenue teams at scaling B2B SaaS companies that are actively trying to solve pipeline conversion and sales execution risk.",
+        "company_size": "80-300 employees",
+        "target_industry": "B2B SaaS",
+        "region": "North America",
+        "decision_maker": "VP Sales or Head of Revenue",
+        "main_pain": "New managers struggle to standardize discovery, coach consistently, and keep pipeline reviews reliable.",
+        "rationale": "The top segment combines direct product fit, clear urgency, reachable buyer titles, and a contract value that can support targeted outbound.",
+        "confidence": "high",
+        "confidence_basis": "The static demo includes customer history, a clear buyer pattern, and multiple segment signals tied to revenue execution."
+      },
+      "approach": {
+        "channel": "Email",
+        "trigger": "The team is hiring new sales managers or recently added a VP Sales while preparing for board-level pipeline scrutiny.",
+        "first_contact": "VP Sales or Head of Revenue",
+        "message_tone": "Specific, consultative, and operational",
+        "sample_message": "Noticed your team is scaling sales management. Are new managers struggling to standardize discovery and keep pipeline reviews consistent?",
+        "confidence": "high",
+        "confidence_basis": "The outreach is tied to a named buyer, a visible trigger, and a measurable sales execution pain."
+      },
+      "hypotheses_to_validate": [
+        "The buyer owns a metric tied to ramp time, conversion quality, or manager productivity.",
+        "The team can reach sales leaders directly enough to test messaging within 30 days.",
+        "Customer history is representative of the highest-retention accounts."
+      ],
+      "questions_for_human": [
+        "Which buyer role feels the pain most directly today?",
+        "What trigger event makes this problem urgent now?",
+        "What proof would make this ICP safe to scale beyond the first test list?"
+      ]
+    },
     "baseline_output": {
       "segment": "b2b saas",
       "icp": "Companies in b2b saas",
@@ -36,94 +123,44 @@
         "message": "Hi, we help companies in b2b saas identify better-fit buyers and prioritize the accounts most likely to convert. Worth a quick conversation?"
       }
     },
-    "result": {
-      "diagnosis": "Northstar Enablement should narrow its first sales motion around revenue teams at scaling B2B SaaS companies. The strongest signals are input mentions sales, revenue, enablement, pipeline and customer history gives usable pattern evidence.",
-      "recommended_icp": "Revenue teams at scaling B2B SaaS companies that are actively trying to solve pipeline conversion and sales execution risk.",
-      "confidence": 86,
-      "market_scores": [
+    "action_plan": {
+      "summary": "Validate the sales-leader ICP with a small account list before scaling messaging.",
+      "next_steps": [
         {
-          "name": "Revenue teams at scaling B2B SaaS companies",
-          "score": 86,
-          "fit": 95,
-          "urgency": 90,
-          "reachability": 85,
-          "deal_quality": 83,
-          "evidence": [
-            "Input mentions sales, revenue, enablement, pipeline",
-            "Customer history gives usable pattern evidence",
-            "Series A mode suggests urgency to focus GTM",
-            "Contract value can support a targeted sales motion"
-          ]
+          "title": "Interview five Series A sales leaders who recently hired first-line managers and validate the ramp-time trigger.",
+          "owner": "Founder or GTM lead",
+          "timeframe": "This week",
+          "success_metric": "Five interviews with clear pain and metric ownership notes"
         },
         {
-          "name": "Operations leaders with measurable workflow bottlenecks",
-          "score": 76,
-          "fit": 77,
-          "urgency": 80,
-          "reachability": 75,
-          "deal_quality": 78,
-          "evidence": [
-            "Customer history gives usable pattern evidence",
-            "Series A mode suggests urgency to focus GTM",
-            "Contract value can support a targeted sales motion"
-          ]
+          "title": "Rewrite the homepage hero around faster manager coaching and cleaner pipeline inspection.",
+          "owner": "Marketing",
+          "timeframe": "Next 7 days",
+          "success_metric": "Updated message tested with target buyers"
         },
         {
-          "name": "Finance teams under close or reconciliation pressure",
-          "score": 74,
-          "fit": 79,
-          "urgency": 84,
-          "reachability": 70,
-          "deal_quality": 77,
-          "evidence": [
-            "Customer history gives usable pattern evidence",
-            "Series A mode suggests urgency to focus GTM",
-            "Contract value can support a targeted sales motion"
-          ]
+          "title": "Build a 25-account list of 80-300 employee SaaS companies with new VP Sales or sales manager hiring signals.",
+          "owner": "Sales",
+          "timeframe": "Next 10 days",
+          "success_metric": "25 accounts with buyer, trigger, and source captured"
+        },
+        {
+          "title": "Run two outbound variants and score replies by pain specificity, budget ownership, and urgency.",
+          "owner": "Sales",
+          "timeframe": "Next 14 days",
+          "success_metric": "Reply quality scored for each variant"
         }
       ],
-      "disqualifiers": [
-        "No named owner for ramp time, pipeline quality, or manager coaching outcomes.",
-        "Teams treating sales enablement as content storage rather than revenue execution.",
-        "Accounts that need heavy custom implementation before a measurable pilot."
-      ],
-      "external_benchmarks": [
-        "Prioritize segments where the pain can be measured in revenue, cost, cycle time, or risk.",
-        "A narrow ICP should name the buyer, trigger event, pain metric, and likely buying motion.",
-        "Early-stage teams should prefer fast learning loops over total addressable market breadth."
-      ],
-      "action_plan": [
-        "Interview five Series A sales leaders who recently hired first-line managers and validate the ramp-time trigger.",
-        "Rewrite the homepage hero around faster manager coaching and cleaner pipeline inspection.",
-        "Build a 25-account list of 80-300 employee SaaS companies with new VP Sales or sales manager hiring signals.",
-        "Run two outbound variants and score replies by pain specificity, budget ownership, and urgency."
-      ],
-      "outreach": [
-        {
-          "title": "Trigger-led opener",
-          "channel": "Email",
-          "message": "Noticed your team is scaling sales management. Are new managers struggling to standardize discovery and keep pipeline reviews consistent?"
-        },
-        {
-          "title": "Operational pain note",
-          "channel": "LinkedIn",
-          "message": "For Series A revenue teams, the costly part is usually not training content. It is repeated pipeline coaching drift across managers. Worth comparing notes?"
-        },
-        {
-          "title": "Proof request",
-          "channel": "Call script",
-          "message": "What would make ramp time and pipeline quality visible enough for leadership to prioritize this quarter?"
-        }
-      ],
-      "human_checkpoint": "Before scaling outreach, confirm that the buyer owns a metric tied to ramp time, conversion quality, or manager productivity and can describe the cost of doing nothing.",
-      "assumptions": [
-        "The provided company description reflects the current product focus.",
-        "The team can reach sales leaders directly enough to test messaging within 30 days.",
-        "Customer history is representative of the highest-retention accounts."
+      "risks": [
+        "Teams may treat sales enablement as content storage rather than revenue execution.",
+        "Accounts may need heavy custom implementation before a measurable pilot."
       ]
     },
+    "refinement_notes": null,
+    "error_message": null,
     "model_name": "static-demo-v1",
     "created_at": "2026-07-15T09:00:00Z",
+    "updated_at": "2026-07-15T09:00:00Z",
     "completed_at": "2026-07-15T09:00:00Z",
     "company": {
       "id": 9001,

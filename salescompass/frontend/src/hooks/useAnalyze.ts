@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { createAnalysis } from "@/lib/api";
-import type { AnalysisRun } from "@/types/analysis";
+import { adaptAnalysisRun } from "@/lib/analysisAdapter";
+import type { AnalysisViewModel } from "@/types/analysis";
 import type { CompanyInput } from "@/types/company";
 
 export function useAnalyze() {
-  const [run, setRun] = useState<AnalysisRun | null>(null);
+  const [run, setRun] = useState<AnalysisViewModel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +15,7 @@ export function useAnalyze() {
     setLoading(true);
     setError(null);
     try {
-      const result = await createAnalysis({ company });
+      const result = adaptAnalysisRun(await createAnalysis({ company }));
       setRun(result);
       return result;
     } catch (err) {
@@ -28,4 +29,3 @@ export function useAnalyze() {
 
   return { analyze, run, loading, error };
 }
-

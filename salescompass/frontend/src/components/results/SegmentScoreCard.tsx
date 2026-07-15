@@ -1,24 +1,21 @@
-import type { SegmentScore } from "@/types/analysis";
+import type { MarketSegmentView } from "@/types/analysis";
 import { Card } from "@/components/ui/Card";
 
-export function SegmentScoreCard({ segment }: { segment: SegmentScore }) {
+export function SegmentScoreCard({ segment }: { segment: MarketSegmentView }) {
   return (
     <Card className="grid gap-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">{segment.name}</h3>
-        <span className="text-xl font-semibold text-signal">{segment.score}</span>
+        <span className="text-xl font-semibold text-signal">{segment.total}/10</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-neutral-600 sm:grid-cols-4">
-        <Metric label="Fit" value={segment.fit} />
-        <Metric label="Urgency" value={segment.urgency} />
-        <Metric label="Reach" value={segment.reachability} />
-        <Metric label="Deal" value={segment.deal_quality} />
+      <div className="grid grid-cols-2 gap-2 text-xs text-neutral-600 sm:grid-cols-5">
+        <Metric label="Size" value={segment.scores.size} />
+        <Metric label="Access" value={segment.scores.access} />
+        <Metric label="Ticket" value={segment.scores.ticket} />
+        <Metric label="Cycle" value={segment.scores.cycle} />
+        <Metric label="Competition" value={segment.scores.competition} />
       </div>
-      <ul className="grid gap-1 text-sm text-neutral-700">
-        {segment.evidence.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
+      <p className="text-sm leading-6 text-neutral-700">{segment.rationale}</p>
     </Card>
   );
 }
@@ -31,4 +28,3 @@ function Metric({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-

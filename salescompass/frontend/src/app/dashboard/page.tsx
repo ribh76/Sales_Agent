@@ -13,8 +13,9 @@ import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ConfidenceBadge } from "@/components/results/ConfidenceBadge";
 import { listAnalyses } from "@/lib/api";
+import { adaptAnalysisRun } from "@/lib/analysisAdapter";
 import { formatDate } from "@/lib/formatters";
-import type { AnalysisRun } from "@/types/analysis";
+import type { AnalysisRunApi, AnalysisViewModel } from "@/types/analysis";
 
 export default function DashboardPage() {
   return (
@@ -27,13 +28,13 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const [runs, setRuns] = useState<AnalysisRun[]>([]);
+  const [runs, setRuns] = useState<AnalysisRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     listAnalyses()
-      .then(setRuns)
+      .then((apiRuns) => setRuns(apiRuns.map(toAnalysisRow)))
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load analyses."))
       .finally(() => setLoading(false));
   }, []);
@@ -69,7 +70,9 @@ function DashboardContent() {
           <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
             <Clock aria-hidden className="h-5 w-5 text-coral" />
             <h2 className="mt-3 text-base font-semibold">Latest</h2>
-            <p className="mt-2 text-sm text-neutral-700">{runs[0] ? formatDate(runs[0].created_at) : "No runs yet"}</p>
+            <p className="mt-2 text-sm text-neutral-700">
+              {runs[0]?.run.createdAt ? formatDate(runs[0].run.createdAt) : "No runs yet"}
+            </p>
           </section>
         </div>
 
@@ -102,21 +105,23 @@ function DashboardContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {runs.map((run) => (
-                    <tr key={run.id} className="align-top">
+                  {runs.map(({ run }) => (
+                    <tr key={run.runId} className="align-top">
                       <td className="px-4 py-4 font-medium text-ink">
-                        {run.company?.name ?? run.input_snapshot.name}
+                        {run.companyName ?? `Analysis #${run.runId}`}
                       </td>
                       <td className="px-4 py-4">
                         <Badge tone="neutral">{formatMode(run.mode)}</Badge>
                       </td>
                       <td className="px-4 py-4">
-                        <ConfidenceBadge value={run.result.confidence} />
+                        <ConfidenceBadge value={run.recommendedICP.confidence} />
                       </td>
-                      <td className="px-4 py-4 text-neutral-700">{formatDate(run.created_at)}</td>
+                      <td className="px-4 py-4 text-neutral-700">
+                        {run.createdAt ? formatDate(run.createdAt) : "Unknown"}
+                      </td>
                       <td className="px-4 py-4">
                         <Link
-                          href={`/results/${run.id}`}
+                          href={`/results/${run.runId}`}
                           className="inline-flex items-center gap-2 font-medium text-signal"
                         >
                           View result
@@ -132,6 +137,18 @@ function DashboardContent() {
         ) : null}
     </>
   );
+}
+
+type AnalysisRow = {
+  run: AnalysisViewModel;
+};
+
+function toAnalysisRow(apiRun: AnalysisRunApi): AnalysisRow {
+  const run = adaptAnalysisRun(apiRun);
+
+  return {
+    run,
+  };
 }
 
 function formatMode(mode: string) {

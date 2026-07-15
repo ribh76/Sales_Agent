@@ -11,13 +11,12 @@ import { MarketScoresChart } from "@/components/results/MarketScoresChart";
 import { MessageVariations } from "@/components/results/MessageVariations";
 import { SegmentScoreCard } from "@/components/results/SegmentScoreCard";
 import staticDemo from "@/data/staticDemoAnalysis.json";
-import type { AnalysisRun } from "@/types/analysis";
+import { adaptAnalysisRun } from "@/lib/analysisAdapter";
+import type { AnalysisRunApi } from "@/types/analysis";
 
-const demoRun = staticDemo.run as AnalysisRun;
+const demoRun = adaptAnalysisRun(staticDemo.run as AnalysisRunApi);
 
 export default function DemoPage() {
-  const result = demoRun.result;
-
   return (
     <AppShell>
       <PageHeader
@@ -48,16 +47,16 @@ export default function DemoPage() {
         </section>
 
         <div className="grid gap-5 xl:grid-cols-[1fr_0.75fr]">
-          <DiagnosisCard diagnosis={result.diagnosis} confidence={result.confidence} />
-          <ICPCard icp={result.recommended_icp} assumptions={result.assumptions} />
+          <DiagnosisCard diagnosis={demoRun.diagnosis} confidence={demoRun.recommendedICP.confidence} />
+          <ICPCard icp={demoRun.recommendedICP} hypotheses={demoRun.hypothesesToValidate} />
         </div>
 
         <section>
           <h2 className="mb-3 text-base font-semibold">Top Candidate Segments</h2>
           <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-            <MarketScoresChart segments={result.market_scores} />
+            <MarketScoresChart segments={demoRun.markets} />
             <div className="grid gap-3">
-              {result.market_scores.map((segment) => (
+              {demoRun.markets.map((segment) => (
                 <SegmentScoreCard key={segment.name} segment={segment} />
               ))}
             </div>
@@ -65,18 +64,26 @@ export default function DemoPage() {
         </section>
 
         <div className="grid gap-5 lg:grid-cols-2">
-          <ExternalBenchmarksCard benchmarks={result.external_benchmarks} />
-          <ActionPlanCard steps={result.action_plan} />
+          <ExternalBenchmarksCard benchmarks={demoRun.benchmarks} />
+          <ActionPlanCard
+            steps={demoRun.actionPlan?.nextSteps ?? []}
+            metrics={demoRun.actionPlan?.metricsToTrack}
+          />
         </div>
 
-        <MessageVariations outreach={result.outreach} />
+        <MessageVariations
+          outreach={demoRun.outreach}
+          variations={demoRun.actionPlan?.messageVariations}
+        />
 
         <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
           <h2 className="text-base font-semibold">Human Checkpoint</h2>
-          <p className="mt-3 text-sm leading-6 text-neutral-700">{result.human_checkpoint}</p>
+          <p className="mt-3 text-sm leading-6 text-neutral-700">
+            {demoRun.questionsForHuman[0] ?? demoRun.recommendedICP.confidenceBasis}
+          </p>
         </section>
 
-        <BaselineComparisonCard baseline={demoRun.baseline_output} agentIcp={result.recommended_icp} />
+        <BaselineComparisonCard baseline={demoRun.baseline} agentIcp={demoRun.recommendedICP.profile} />
       </div>
     </AppShell>
   );

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { getAnalysis } from "@/lib/api";
-import type { AnalysisRun } from "@/types/analysis";
+import { adaptAnalysisRun } from "@/lib/analysisAdapter";
+import type { AnalysisViewModel } from "@/types/analysis";
 
 export function useAnalysisResult(runId?: string) {
-  const [run, setRun] = useState<AnalysisRun | null>(null);
+  const [run, setRun] = useState<AnalysisViewModel | null>(null);
   const [loading, setLoading] = useState(Boolean(runId));
   const [error, setError] = useState<string | null>(null);
 
@@ -14,12 +15,12 @@ export function useAnalysisResult(runId?: string) {
       return;
     }
     setLoading(true);
+    setError(null);
     getAnalysis(runId)
-      .then(setRun)
+      .then((response) => setRun(adaptAnalysisRun(response)))
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load run."))
       .finally(() => setLoading(false));
   }, [runId]);
 
   return { run, loading, error };
 }
-

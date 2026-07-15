@@ -1,5 +1,6 @@
-import type { AnalysisCreatePayload, AnalysisRun, FeedbackPayload } from "@/types/analysis";
+import type { AnalysisRunApi, CompanyMode } from "@/types/analysis";
 import type { LoginPayload, RegisterPayload, Token, User } from "@/types/auth";
+import type { CompanyInput } from "@/types/company";
 import type {
   EvaluationProfile,
   EvaluationResult,
@@ -11,6 +12,20 @@ import { API_BASE_URL } from "./constants";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
+};
+
+type AnalysisCreatePayload = {
+  company?: CompanyInput;
+  company_id?: number;
+  mode?: CompanyMode;
+  input?: Record<string, unknown>;
+};
+
+type FeedbackPayload = {
+  run_id: number;
+  rating: number;
+  confidence: number;
+  notes?: string;
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -71,19 +86,19 @@ export function getMe(): Promise<User> {
   return request<User>("/auth/me");
 }
 
-export function createAnalysis(payload: AnalysisCreatePayload): Promise<AnalysisRun> {
-  return request<AnalysisRun>("/analyses", {
+export function createAnalysis(payload: AnalysisCreatePayload): Promise<AnalysisRunApi> {
+  return request<AnalysisRunApi>("/analyses", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
-export function listAnalyses(): Promise<AnalysisRun[]> {
-  return request<AnalysisRun[]>("/analyses");
+export function listAnalyses(): Promise<AnalysisRunApi[]> {
+  return request<AnalysisRunApi[]>("/analyses");
 }
 
-export function getAnalysis(runId: string | number): Promise<AnalysisRun> {
-  return request<AnalysisRun>(`/analyses/${runId}`);
+export function getAnalysis(runId: string | number): Promise<AnalysisRunApi> {
+  return request<AnalysisRunApi>(`/analyses/${runId}`);
 }
 
 export function submitFeedback(payload: FeedbackPayload): Promise<unknown> {

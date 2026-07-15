@@ -53,7 +53,7 @@ export function AnalyzeForm() {
       website: company.website || undefined,
       customer_history: company.has_customer_history ? company.customer_history : undefined
     });
-    router.push(`/results/${run.id}`);
+    router.push(`/results/${run.runId}`);
   }
 
   return (
@@ -142,4 +142,3 @@ export function AnalyzeForm() {
     </form>
   );
 }
-

@@ -1,4 +1,4 @@
-import type { BaselineOutput } from "@/types/analysis";
+import type { BaselineView } from "@/types/analysis";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
@@ -6,7 +6,7 @@ export function BaselineComparisonCard({
   baseline,
   agentIcp
 }: {
-  baseline: BaselineOutput;
+  baseline: BaselineView;
   agentIcp: string;
 }) {
   return (
@@ -18,15 +18,11 @@ export function BaselineComparisonCard({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-md bg-field p-4">
           <div className="text-xs font-semibold uppercase text-neutral-500">Baseline output</div>
-          <p className="mt-2 text-sm font-semibold text-ink">
-            {baseline.recommended_icp || baseline.icp || "Broad target companies"}
+          <p className="mt-2 text-sm font-semibold text-ink">{baseline.icp}</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-700">{baseline.rationale}</p>
+          <p className="mt-2 text-sm font-medium text-neutral-700">
+            {baseline.outreachChannel}: {baseline.outreachMessage}
           </p>
-          {baseline.rationale ? (
-            <p className="mt-2 text-sm leading-6 text-neutral-700">{baseline.rationale}</p>
-          ) : null}
-          {baseline.next_step ? (
-            <p className="mt-2 text-sm font-medium text-neutral-700">{baseline.next_step}</p>
-          ) : null}
         </div>
         <div className="rounded-md bg-field p-4">
           <div className="text-xs font-semibold uppercase text-neutral-500">Agent output</div>

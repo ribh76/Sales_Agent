@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "./analysis";
+import type { AgentOutputApi, ConfidenceLevel } from "./analysis";
 import type { CompanyInput } from "./company";
 
 export type HumanPreference = "baseline" | "agent" | "tie";
@@ -10,6 +10,11 @@ export type EvaluationProfile = {
   mode: "history" | "no_history";
   expected_confidence: "low" | "medium" | "high";
   thin_data_case: boolean;
+};
+
+export type EvaluationAgentResult = AgentOutputApi & {
+  recommended_icp?: string;
+  confidence?: ConfidenceLevel | number | string;
 };
 
 export type EvaluationResult = {
@@ -24,7 +29,7 @@ export type EvaluationResult = {
     rationale?: string;
     next_step?: string;
   };
-  agent_output: AnalysisResult;
+  agent_output: EvaluationAgentResult;
   confidence_pass: boolean;
   human_preference: HumanPreference | null;
   notes: string | null;
@@ -36,7 +41,7 @@ export type EvaluationResult = {
     rationale?: string;
     next_step?: string;
   };
-  agent_result: AnalysisResult;
+  agent_result: EvaluationAgentResult;
   scorecard: {
     baseline: Record<string, number>;
     agent: Record<string, number>;

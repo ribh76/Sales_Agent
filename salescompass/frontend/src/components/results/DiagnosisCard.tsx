@@ -1,7 +1,14 @@
+import type { ConfidenceLevel } from "@/types/analysis";
 import { Card } from "@/components/ui/Card";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 
-export function DiagnosisCard({ diagnosis, confidence }: { diagnosis: string; confidence: number }) {
+export function DiagnosisCard({
+  diagnosis,
+  confidence
+}: {
+  diagnosis: string;
+  confidence: ConfidenceLevel | number | string;
+}) {
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -12,4 +19,3 @@ export function DiagnosisCard({ diagnosis, confidence }: { diagnosis: string; co
     </Card>
   );
 }
-
