@@ -2,12 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
 
 export function Navbar() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
+  const displayName = user?.full_name || user?.username || user?.email;
 
   return (
     <header className="border-b border-line bg-white">
@@ -19,13 +22,16 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
-              <span className="hidden text-sm text-neutral-600 sm:inline">{user.full_name}</span>
+              <span className="hidden text-sm text-neutral-600 sm:inline">{displayName}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 icon={<LogOut aria-hidden className="h-4 w-4" />}
-                onClick={signOut}
+                onClick={() => {
+                  signOut();
+                  router.push("/login");
+                }}
                 title="Sign out"
               >
                 Sign out
@@ -41,4 +47,3 @@ export function Navbar() {
     </header>
   );
 }
-

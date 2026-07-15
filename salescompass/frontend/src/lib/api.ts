@@ -1,6 +1,11 @@
 import type { AnalysisCreatePayload, AnalysisRun, FeedbackPayload } from "@/types/analysis";
 import type { LoginPayload, RegisterPayload, Token, User } from "@/types/auth";
-import type { EvaluationProfile, EvaluationResult } from "@/types/evaluation";
+import type {
+  EvaluationProfile,
+  EvaluationResult,
+  EvaluationSummaryData,
+  HumanPreference
+} from "@/types/evaluation";
 import { getStoredToken } from "./auth";
 import { API_BASE_URL } from "./constants";
 
@@ -100,3 +105,17 @@ export function runEvaluation(profileKey: string): Promise<EvaluationResult> {
   });
 }
 
+export function rateEvaluationResult(
+  resultId: number,
+  payload: { human_preference: HumanPreference; notes?: string }
+): Promise<EvaluationResult> {
+  return request<EvaluationResult>(`/evaluation/results/${resultId}/rate`, {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getEvaluationSummary(): Promise<EvaluationSummaryData> {
+  return request<EvaluationSummaryData>("/evaluation/summary", { auth: false });
+}

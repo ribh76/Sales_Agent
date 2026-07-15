@@ -1,0 +1,142 @@
+{
+  "company": {
+    "name": "Northstar Enablement",
+    "website": "https://northstar.example",
+    "industry": "B2B SaaS",
+    "stage": "Series A",
+    "average_contract_value": 18000,
+    "has_customer_history": true,
+    "description": "Sales enablement software that helps revenue teams onboard reps faster, standardize discovery, and coach managers on pipeline quality.",
+    "customer_history": "Best customers are 80-300 employee SaaS companies with new sales managers, ramp-time pain, and board pressure to improve conversion."
+  },
+  "run": {
+    "id": 9001,
+    "company_id": 9001,
+    "status": "completed",
+    "mode": "history",
+    "input_snapshot": {
+      "name": "Northstar Enablement",
+      "website": "https://northstar.example",
+      "industry": "B2B SaaS",
+      "stage": "Series A",
+      "average_contract_value": 18000,
+      "has_customer_history": true,
+      "description": "Sales enablement software that helps revenue teams onboard reps faster, standardize discovery, and coach managers on pipeline quality.",
+      "customer_history": "Best customers are 80-300 employee SaaS companies with new sales managers, ramp-time pain, and board pressure to improve conversion."
+    },
+    "baseline_output": {
+      "segment": "b2b saas",
+      "icp": "Companies in b2b saas",
+      "recommended_icp": "Companies in B2B SaaS",
+      "confidence": "medium",
+      "rationale": "Naively selected based on the stated industry or problem category.",
+      "next_step": "Send a generic cold email to a broad list in the selected segment.",
+      "outreach": {
+        "channel": "cold email",
+        "message": "Hi, we help companies in b2b saas identify better-fit buyers and prioritize the accounts most likely to convert. Worth a quick conversation?"
+      }
+    },
+    "result": {
+      "diagnosis": "Northstar Enablement should narrow its first sales motion around revenue teams at scaling B2B SaaS companies. The strongest signals are input mentions sales, revenue, enablement, pipeline and customer history gives usable pattern evidence.",
+      "recommended_icp": "Revenue teams at scaling B2B SaaS companies that are actively trying to solve pipeline conversion and sales execution risk.",
+      "confidence": 86,
+      "market_scores": [
+        {
+          "name": "Revenue teams at scaling B2B SaaS companies",
+          "score": 86,
+          "fit": 95,
+          "urgency": 90,
+          "reachability": 85,
+          "deal_quality": 83,
+          "evidence": [
+            "Input mentions sales, revenue, enablement, pipeline",
+            "Customer history gives usable pattern evidence",
+            "Series A mode suggests urgency to focus GTM",
+            "Contract value can support a targeted sales motion"
+          ]
+        },
+        {
+          "name": "Operations leaders with measurable workflow bottlenecks",
+          "score": 76,
+          "fit": 77,
+          "urgency": 80,
+          "reachability": 75,
+          "deal_quality": 78,
+          "evidence": [
+            "Customer history gives usable pattern evidence",
+            "Series A mode suggests urgency to focus GTM",
+            "Contract value can support a targeted sales motion"
+          ]
+        },
+        {
+          "name": "Finance teams under close or reconciliation pressure",
+          "score": 74,
+          "fit": 79,
+          "urgency": 84,
+          "reachability": 70,
+          "deal_quality": 77,
+          "evidence": [
+            "Customer history gives usable pattern evidence",
+            "Series A mode suggests urgency to focus GTM",
+            "Contract value can support a targeted sales motion"
+          ]
+        }
+      ],
+      "disqualifiers": [
+        "No named owner for ramp time, pipeline quality, or manager coaching outcomes.",
+        "Teams treating sales enablement as content storage rather than revenue execution.",
+        "Accounts that need heavy custom implementation before a measurable pilot."
+      ],
+      "external_benchmarks": [
+        "Prioritize segments where the pain can be measured in revenue, cost, cycle time, or risk.",
+        "A narrow ICP should name the buyer, trigger event, pain metric, and likely buying motion.",
+        "Early-stage teams should prefer fast learning loops over total addressable market breadth."
+      ],
+      "action_plan": [
+        "Interview five Series A sales leaders who recently hired first-line managers and validate the ramp-time trigger.",
+        "Rewrite the homepage hero around faster manager coaching and cleaner pipeline inspection.",
+        "Build a 25-account list of 80-300 employee SaaS companies with new VP Sales or sales manager hiring signals.",
+        "Run two outbound variants and score replies by pain specificity, budget ownership, and urgency."
+      ],
+      "outreach": [
+        {
+          "title": "Trigger-led opener",
+          "channel": "Email",
+          "message": "Noticed your team is scaling sales management. Are new managers struggling to standardize discovery and keep pipeline reviews consistent?"
+        },
+        {
+          "title": "Operational pain note",
+          "channel": "LinkedIn",
+          "message": "For Series A revenue teams, the costly part is usually not training content. It is repeated pipeline coaching drift across managers. Worth comparing notes?"
+        },
+        {
+          "title": "Proof request",
+          "channel": "Call script",
+          "message": "What would make ramp time and pipeline quality visible enough for leadership to prioritize this quarter?"
+        }
+      ],
+      "human_checkpoint": "Before scaling outreach, confirm that the buyer owns a metric tied to ramp time, conversion quality, or manager productivity and can describe the cost of doing nothing.",
+      "assumptions": [
+        "The provided company description reflects the current product focus.",
+        "The team can reach sales leaders directly enough to test messaging within 30 days.",
+        "Customer history is representative of the highest-retention accounts."
+      ]
+    },
+    "model_name": "static-demo-v1",
+    "created_at": "2026-07-15T09:00:00Z",
+    "completed_at": "2026-07-15T09:00:00Z",
+    "company": {
+      "id": 9001,
+      "owner_id": 9001,
+      "name": "Northstar Enablement",
+      "website": "https://northstar.example",
+      "industry": "B2B SaaS",
+      "stage": "Series A",
+      "average_contract_value": 18000,
+      "has_customer_history": true,
+      "description": "Sales enablement software that helps revenue teams onboard reps faster, standardize discovery, and coach managers on pipeline quality.",
+      "customer_history": "Best customers are 80-300 employee SaaS companies with new sales managers, ramp-time pain, and board pressure to improve conversion.",
+      "created_at": "2026-07-15T09:00:00Z"
+    }
+  }
+}

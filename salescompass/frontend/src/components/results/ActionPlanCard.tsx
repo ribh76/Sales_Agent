@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 export function ActionPlanCard({ steps }: { steps: string[] }) {
   return (
     <Card>
-      <h2 className="text-base font-semibold">30-day action plan</h2>
+      <h2 className="text-base font-semibold">Action Plan</h2>
       <div className="mt-4 grid gap-3">
         {steps.map((step, index) => (
           <div key={step} className="flex gap-3">

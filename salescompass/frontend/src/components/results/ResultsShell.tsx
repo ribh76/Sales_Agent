@@ -2,6 +2,7 @@ import type { AnalysisRun } from "@/types/analysis";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { formatDate } from "@/lib/formatters";
 import { ActionPlanCard } from "./ActionPlanCard";
+import { BaselineComparisonCard } from "./BaselineComparisonCard";
 import { DiagnosisCard } from "./DiagnosisCard";
 import { ExternalBenchmarksCard } from "./ExternalBenchmarksCard";
 import { HumanCheckpoint } from "./HumanCheckpoint";
@@ -26,9 +27,12 @@ export function ResultsShell({ run }: { run: AnalysisRun }) {
         </div>
 
         <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-          <MarketScoresChart segments={result.market_scores} />
-          <div className="grid gap-3">
-            {result.market_scores.slice(0, 2).map((segment) => (
+          <section>
+            <h2 className="mb-3 text-base font-semibold">Top Candidate Segments</h2>
+            <MarketScoresChart segments={result.market_scores} />
+          </section>
+          <div className="grid content-start gap-3">
+            {result.market_scores.slice(0, 3).map((segment) => (
               <SegmentScoreCard key={segment.name} segment={segment} />
             ))}
           </div>
@@ -54,8 +58,9 @@ export function ResultsShell({ run }: { run: AnalysisRun }) {
             </ul>
           </section>
         </div>
+
+        <BaselineComparisonCard baseline={run.baseline_output} agentIcp={result.recommended_icp} />
       </div>
     </div>
   );
 }
-

@@ -29,12 +29,28 @@ export type AnalysisResult = {
   assumptions: string[];
 };
 
+export type BaselineOutput = {
+  segment?: string;
+  icp?: string;
+  recommended_icp?: string;
+  confidence?: string | number;
+  rationale?: string;
+  next_step?: string;
+  outreach?: {
+    channel?: string;
+    message?: string;
+  };
+};
+
 export type AnalysisRun = {
   id: number;
   company_id: number;
   status: string;
+  mode: "history" | "no_history" | string;
   input_snapshot: CompanyInput;
   result: AnalysisResult;
+  agent_output?: AnalysisResult;
+  baseline_output: BaselineOutput;
   model_name: string;
   created_at: string;
   completed_at?: string;
@@ -51,4 +67,3 @@ export type FeedbackPayload = {
   confidence: number;
   notes?: string;
 };
-

@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getStoredToken } from "@/lib/auth";
+import { getMe } from "@/lib/api";
+import { clearStoredToken, getStoredToken } from "@/lib/auth";
 import { Spinner } from "@/components/ui/Spinner";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -15,7 +16,22 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       router.replace("/login");
       return;
     }
-    setReady(true);
+
+    let active = true;
+    getMe()
+      .then(() => {
+        if (active) {
+          setReady(true);
+        }
+      })
+      .catch(() => {
+        clearStoredToken();
+        router.replace("/login");
+      });
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   if (!ready) {
@@ -28,4 +44,3 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   return <>{children}</>;
 }
-

@@ -13,7 +13,18 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useEvaluation } from "@/hooks/useEvaluation";
 
 export default function EvaluationPage() {
-  const { profiles, selectedKey, setSelectedKey, result, loading, error, run } = useEvaluation();
+  const {
+    profiles,
+    selectedKey,
+    setSelectedKey,
+    result,
+    summary,
+    loading,
+    savingPreference,
+    error,
+    run,
+    savePreference
+  } = useEvaluation();
 
   return (
     <AppShell>
@@ -39,13 +50,17 @@ export default function EvaluationPage() {
         <ErrorMessage message={error} />
         {result ? (
           <>
-            <EvaluationSummary result={result} />
+            <EvaluationSummary result={result} summary={summary} />
             <BaselineVsAgent result={result} />
-            <HumanRatingForm />
+            <HumanRatingForm
+              resultId={result.id}
+              currentPreference={result.human_preference}
+              saving={savingPreference}
+              onSave={savePreference}
+            />
           </>
         ) : null}
       </div>
     </AppShell>
   );
 }
-

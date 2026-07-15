@@ -1,14 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listEvaluationProfiles, runEvaluation } from "@/lib/api";
-import type { EvaluationProfile, EvaluationResult } from "@/types/evaluation";
+import {
+  getEvaluationSummary,
+  listEvaluationProfiles,
+  rateEvaluationResult,
+  runEvaluation
+} from "@/lib/api";
+import type {
+  EvaluationProfile,
+  EvaluationResult,
+  EvaluationSummaryData,
+  HumanPreference
+} from "@/types/evaluation";
 
 export function useEvaluation() {
   const [profiles, setProfiles] = useState<EvaluationProfile[]>([]);
   const [selectedKey, setSelectedKey] = useState("northstar-enablement");
   const [result, setResult] = useState<EvaluationResult | null>(null);
+  const [summary, setSummary] = useState<EvaluationSummaryData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingPreference, setSavingPreference] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,7 +32,17 @@ export function useEvaluation() {
         }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Could not load profiles."));
+    refreshSummary();
   }, []);
+
+  async function refreshSummary() {
+    try {
+      const nextSummary = await getEvaluationSummary();
+      setSummary(nextSummary);
+    } catch {
+      setSummary(null);
+    }
+  }
 
   async function run() {
     setLoading(true);
@@ -28,6 +50,7 @@ export function useEvaluation() {
     try {
       const evaluation = await runEvaluation(selectedKey);
       setResult(evaluation);
+      await refreshSummary();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evaluation failed.");
     } finally {
@@ -35,6 +58,38 @@ export function useEvaluation() {
     }
   }
 
-  return { profiles, selectedKey, setSelectedKey, result, loading, error, run };
-}
+  async function savePreference(humanPreference: HumanPreference, notes?: string) {
+    if (!result) {
+      return;
+    }
 
+    setSavingPreference(true);
+    setError(null);
+    try {
+      const updated = await rateEvaluationResult(result.id, {
+        human_preference: humanPreference,
+        notes: notes?.trim() || undefined
+      });
+      setResult(updated);
+      await refreshSummary();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save preference.");
+      throw err;
+    } finally {
+      setSavingPreference(false);
+    }
+  }
+
+  return {
+    profiles,
+    selectedKey,
+    setSelectedKey,
+    result,
+    summary,
+    loading,
+    savingPreference,
+    error,
+    run,
+    savePreference
+  };
+}
