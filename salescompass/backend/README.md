@@ -13,7 +13,7 @@ uvicorn app.main:app --reload
 
 ## Key Environment Variables
 
-- `DATABASE_URL`: SQLAlchemy database URL. Local Postgres example: `postgresql+psycopg://Sales_Compass_admin:ADMIN@localhost:5432/SalesCompass`.
+- `DATABASE_URL`: SQLAlchemy database URL. Local Postgres example: `postgresql+psycopg://Sales_Compass_admin:ADMIN@localhost:5433/SalesCompass`.
 - `REDIS_URL`: Redis URL used for cached ICP analysis outputs.
 - `CACHE_TTL_SECONDS`: Redis cache TTL for analysis outputs. Defaults to 86400.
 - `SECRET_KEY`: JWT signing secret.

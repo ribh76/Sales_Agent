@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: Sales_Compass_admin
       POSTGRES_PASSWORD: ADMIN
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +29,8 @@ services:
     build:
       context: ./backend
     env_file:
-      - ./.env
+      - path: ./.env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://Sales_Compass_admin:ADMIN@postgres:5432/SalesCompass
       REDIS_URL: redis://redis:6379/0

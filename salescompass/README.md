@@ -20,7 +20,7 @@ Backend: `http://localhost:8000`
 
 Frontend: `http://localhost:3000`
 
-Docker Compose also starts Postgres on `localhost:5432` with database `SalesCompass` and Redis on `localhost:6379`.
+Docker Compose also starts Postgres on `localhost:5433` with database `SalesCompass` and Redis on `localhost:6379`.
 
 ## Local Backend
 

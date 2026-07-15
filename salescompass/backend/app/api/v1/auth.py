@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import bad_request, unauthorized
+from app.core.errors import conflict, unauthorized
 from app.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.user import User
@@ -50,7 +51,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> User:
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
-        raise bad_request("A user with this email already exists")
+        raise conflict("A user with this email already exists")
+
+    existing = db.query(User).filter(User.username == payload.username).first()
+    if existing:
+        raise conflict("A user with this username already exists")
 
     user = User(
         email=str(payload.email),
@@ -58,7 +63,15 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> U
         hashed_password=get_password_hash(payload.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if db.query(User).filter(User.email == payload.email).first():
+            raise conflict("A user with this email already exists") from exc
+        if db.query(User).filter(User.username == payload.username).first():
+            raise conflict("A user with this username already exists") from exc
+        raise conflict("A user with these credentials already exists") from exc
     db.refresh(user)
     return user
 
