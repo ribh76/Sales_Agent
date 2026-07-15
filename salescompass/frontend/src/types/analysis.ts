@@ -1,5 +1,87 @@
 import type { Company, CompanyInput } from "./company";
 
+export type CompanyMode = "history" | "no_history";
+
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+export type SegmentScores = {
+  size: number;
+  access: number;
+  ticket: number;
+  cycle: number;
+  competition: number;
+};
+
+export type MarketSegment = {
+  name: string;
+  scores: SegmentScores;
+  total: number;
+  rationale: string;
+};
+
+export type ICPOutput = {
+  profile: string;
+  company_size: string;
+  target_industry: string;
+  region: string;
+  decision_maker: string;
+  main_pain: string;
+  rationale: string;
+  confidence: ConfidenceLevel;
+  confidence_basis: string;
+};
+
+export type OutreachOutput = {
+  channel: string;
+  trigger: string;
+  first_contact: string;
+  message_tone: string;
+  sample_message: string;
+  confidence: ConfidenceLevel;
+  confidence_basis: string;
+};
+
+export type AgentOutput = {
+  diagnosis: string;
+  external_benchmarks: {
+    stat: string;
+    source: string;
+  }[];
+  markets: MarketSegment[];
+  icp: ICPOutput;
+  approach: OutreachOutput;
+  hypotheses_to_validate: string[];
+  questions_for_human: string[];
+};
+
+export type BaselineOutput = {
+  segment: string;
+  icp: string;
+  rationale: string;
+  confidence: ConfidenceLevel;
+  outreach: {
+    channel: string;
+    message: string;
+  };
+  recommended_icp?: string;
+  next_step?: string;
+};
+
+export type ActionPlanStep = {
+  title: string;
+  owner?: string;
+  timeframe?: string;
+  success_metric?: string;
+};
+
+export type ActionPlanOutput =
+  | {
+      summary?: string;
+      next_steps: ActionPlanStep[];
+      risks?: string[];
+    }
+  | string[];
+
 export type SegmentScore = {
   name: string;
   score: number;
@@ -29,30 +111,20 @@ export type AnalysisResult = {
   assumptions: string[];
 };
 
-export type BaselineOutput = {
-  segment?: string;
-  icp?: string;
-  recommended_icp?: string;
-  confidence?: string | number;
-  rationale?: string;
-  next_step?: string;
-  outreach?: {
-    channel?: string;
-    message?: string;
-  };
-};
-
 export type AnalysisRun = {
   id: number;
   company_id: number;
-  status: string;
-  mode: "history" | "no_history" | string;
+  status: "pending" | "completed" | "failed";
+  mode: CompanyMode;
+  agent_output: AgentOutput | AnalysisResult;
+  baseline_output: BaselineOutput;
+  action_plan?: ActionPlanOutput;
+  created_at: string;
+
+  // Compatibility fields returned by the current FastAPI response.
   input_snapshot: CompanyInput;
   result: AnalysisResult;
-  agent_output?: AnalysisResult;
-  baseline_output: BaselineOutput;
   model_name: string;
-  created_at: string;
   completed_at?: string;
   company?: Company;
 };
