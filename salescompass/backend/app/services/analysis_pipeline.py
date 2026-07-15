@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
+
+from pydantic import ValidationError
 
 from app.schemas.analysis import AnalysisResult, OutreachVariation, SegmentScore
 from app.schemas.company import CompanyCreate
-from app.services.anthropic_client import AnthropicICPClient
+from app.services.anthropic_client import call_claude_json
+from app.services.baseline_service import build_baseline
+from app.services.prompts import (
+    build_action_plan_prompt,
+    build_analysis_prompt,
+    build_refine_prompt,
+)
 
 
 @dataclass(frozen=True)
@@ -54,12 +62,88 @@ SEGMENTS: tuple[SegmentTemplate, ...] = (
 )
 
 
+def run_full_analysis(company_input: dict[str, Any], mode: str) -> dict[str, Any]:
+    company = _company_from_input(company_input, mode)
+    prompt = build_analysis_prompt(company.model_dump(mode="json"), company.has_customer_history)
+    raw_output = call_claude_json(prompt)
+    agent_output = validate_agent_output(raw_output, company)
+    baseline_output = generate_baseline(company.model_dump(mode="json"), company.mode)
+
+    return {
+        "status": "completed",
+        "agent_output": agent_output,
+        "baseline_output": baseline_output,
+    }
+
+
+def refine_analysis(
+    company_input: dict[str, Any],
+    previous_output: dict[str, Any],
+    adjustment: str,
+) -> dict[str, Any]:
+    company = _company_from_input(company_input, _optional_mode(company_input))
+    prompt = build_refine_prompt(company.model_dump(mode="json"), previous_output, adjustment)
+    raw_output = call_claude_json(prompt)
+    return validate_agent_output(raw_output or previous_output, company)
+
+
+def generate_action_plan(
+    company_input: dict[str, Any],
+    agent_output: dict[str, Any],
+) -> dict[str, Any]:
+    prompt = build_action_plan_prompt(company_input, agent_output)
+    action_plan = call_claude_json(prompt)
+    if action_plan:
+        return action_plan
+
+    next_steps = agent_output.get("action_plan") or []
+    return {
+        "summary": "Execution plan generated from the latest ICP recommendation.",
+        "next_steps": [
+            {
+                "title": step,
+                "owner": "Founder",
+                "timeframe": "Next 30 days",
+                "success_metric": "Completed with evidence captured",
+            }
+            for step in next_steps
+        ],
+        "risks": agent_output.get("disqualifiers") or [],
+    }
+
+
+def validate_agent_output(raw_output: dict[str, Any], company: CompanyCreate) -> dict[str, Any]:
+    try:
+        return AnalysisResult.model_validate(raw_output).model_dump(mode="json")
+    except (TypeError, ValidationError, ValueError):
+        return _deterministic_analysis(company).model_dump(mode="json")
+
+
+def generate_baseline(company_input: dict[str, Any], mode: str) -> dict[str, object]:
+    return build_baseline(_company_from_input(company_input, mode))
+
+
 def run_icp_analysis(company: CompanyCreate, use_llm: bool = True) -> AnalysisResult:
     if use_llm:
-        llm_result = AnthropicICPClient().analyze(company)
-        if llm_result:
-            return AnalysisResult.model_validate(llm_result)
+        result = run_full_analysis(company.model_dump(mode="json"), company.mode)
+        return AnalysisResult.model_validate(result["agent_output"])
 
+    return _deterministic_analysis(company)
+
+
+def _company_from_input(company_input: dict[str, Any], mode: str | None) -> CompanyCreate:
+    payload = dict(company_input)
+    if mode is not None:
+        payload["mode"] = mode
+    return CompanyCreate.model_validate(payload)
+
+
+def _optional_mode(company_input: dict[str, Any]) -> str | None:
+    value = company_input.get("mode")
+    return str(value) if value is not None else None
+
+
+def _deterministic_analysis(company: CompanyCreate) -> AnalysisResult:
     scores = _score_segments(company)
     top = scores[0]
     confidence = _confidence(company, top.score)

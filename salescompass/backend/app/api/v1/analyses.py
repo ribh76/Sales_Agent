@@ -18,8 +18,12 @@ from app.schemas.analysis import (
 )
 from app.schemas.company import COMPANY_MODEL_FIELDS, CompanyCreate
 from app.schemas.feedback import FeedbackRead
-from app.services.analysis_cache import run_cached_icp_analysis
-from app.services.baseline_service import build_baseline
+from app.services.analysis_pipeline import (
+    generate_action_plan as generate_ai_action_plan,
+    generate_baseline,
+    refine_analysis as refine_ai_analysis,
+    run_full_analysis,
+)
 
 router = APIRouter()
 
@@ -114,8 +118,7 @@ async def create_analysis(
     db.flush()
 
     try:
-        result = await run_in_threadpool(run_cached_icp_analysis, company_input)
-        baseline = await run_in_threadpool(build_baseline, company_input)
+        analysis = await run_in_threadpool(run_full_analysis, input_snapshot, company_input.mode)
     except Exception as exc:
         run.status = "failed"
         run.error_message = str(exc)
@@ -125,10 +128,10 @@ async def create_analysis(
             detail="Analysis failed",
         ) from exc
 
-    result_data = result.model_dump(mode="json")
+    result_data = analysis["agent_output"]
     run.status = "completed"
     run.agent_output = result_data
-    run.baseline_output = baseline
+    run.baseline_output = analysis["baseline_output"]
     run.action_plan = result_data.get("action_plan")
 
     db.commit()
@@ -187,13 +190,15 @@ async def refine_analysis(
     if payload.input:
         data.update(payload.input)
 
-    description = str(data.get("description", ""))
-    data["description"] = f"{description}\n\nRefinement notes: {payload.notes}".strip()
-
     company_input = validate_company_input(data)
-    result = await run_in_threadpool(run_cached_icp_analysis, company_input)
-    baseline = await run_in_threadpool(build_baseline, company_input)
-    result_data = result.model_dump(mode="json")
+    company_payload = company_input.model_dump(mode="json")
+    result_data = await run_in_threadpool(
+        refine_ai_analysis,
+        company_payload,
+        run.agent_output,
+        payload.notes,
+    )
+    baseline = await run_in_threadpool(generate_baseline, company_payload, company_input.mode)
 
     run.status = "completed"
     run.mode = company_input.mode
@@ -216,7 +221,11 @@ async def create_action_plan(
     current_user: User = Depends(get_current_user),
 ) -> ActionPlanResponse:
     run = get_owned_run(db, run_id, current_user.id)
-    action_plan = run.action_plan or run.agent_output.get("action_plan") or []
+    action_plan = await run_in_threadpool(
+        generate_ai_action_plan,
+        run.input_snapshot,
+        run.agent_output,
+    )
     run.action_plan = action_plan
     db.commit()
     return ActionPlanResponse(run_id=run.id, action_plan=action_plan)
