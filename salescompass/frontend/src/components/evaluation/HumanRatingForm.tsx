@@ -5,64 +5,100 @@ import type { HumanPreference } from "@/types/evaluation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+
+const OPTIONS: Array<{ value: HumanPreference; label: string }> = [
+  { value: "agent", label: "SalesCompass Agent" },
+  { value: "baseline", label: "Naive Baseline" },
+  { value: "tie", label: "Tie" },
+];
 
 export function HumanRatingForm({
   resultId,
   currentPreference,
-  saving,
-  onSave
+  currentNotes,
+  isSubmitting,
+  error,
+  onSubmit,
 }: {
   resultId: number;
   currentPreference: HumanPreference | null;
-  saving: boolean;
-  onSave: (preference: HumanPreference, notes?: string) => Promise<void>;
+  currentNotes?: string | null;
+  isSubmitting: boolean;
+  error?: string | null;
+  onSubmit: (preference: HumanPreference, notes?: string) => Promise<void>;
 }) {
-  const [preference, setPreference] = useState<HumanPreference>(currentPreference ?? "agent");
-  const [notes, setNotes] = useState("");
+  const [preference, setPreference] = useState<HumanPreference | null>(currentPreference);
+  const [notes, setNotes] = useState(currentPreference ? currentNotes ?? "" : "");
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPreference(currentPreference ?? "agent");
-    setNotes("");
+    setPreference(currentPreference);
+    setNotes(currentPreference ? currentNotes ?? "" : "");
     setSaved(false);
-    setError(null);
-  }, [resultId, currentPreference]);
+    setLocalError(null);
+  }, [resultId, currentPreference, currentNotes]);
 
   async function savePreference() {
-    setError(null);
+    if (!preference) {
+      return;
+    }
+
+    setLocalError(null);
     setSaved(false);
     try {
-      await onSave(preference, notes);
+      await onSubmit(preference, notes);
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save preference.");
+      setLocalError(err instanceof Error ? err.message : "Could not save preference.");
     }
   }
 
   return (
     <Card>
-      <h2 className="text-base font-semibold">Human preference form</h2>
+      <h2 className="text-base font-semibold">Human Preference</h2>
+      <p className="mt-1 text-sm text-neutral-600">
+        Which recommendation would you actually act on?
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {OPTIONS.map((option) => {
+          const selected = preference === option.value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                setPreference(option.value);
+                setSaved(false);
+              }}
+              className={`rounded-md border px-4 py-3 text-left text-sm font-semibold transition ${
+                selected
+                  ? "border-signal bg-teal-50 text-ink ring-2 ring-teal-100"
+                  : "border-line bg-white text-neutral-700 hover:border-signal/50"
+              }`}
+              aria-pressed={selected}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-4 grid gap-3">
-        <Select
-          label="Preferred output"
-          value={preference}
-          onChange={(event) => setPreference(event.target.value as HumanPreference)}
-          options={[
-            { value: "agent", label: "Agent" },
-            { value: "baseline", label: "Baseline" },
-            { value: "tie", label: "Tie" }
-          ]}
-        />
-        <Textarea label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-        <ErrorMessage message={error} />
-        <div className="flex items-center gap-3">
-          <Button type="button" onClick={savePreference} disabled={saving}>
-            {saving ? "Saving" : "Save preference"}
+        <Textarea label="Why?" value={notes} onChange={(event) => setNotes(event.target.value)} />
+        <ErrorMessage message={localError ?? error} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            onClick={savePreference}
+            disabled={!preference || isSubmitting}
+          >
+            {isSubmitting ? "Saving..." : "Save Rating"}
           </Button>
-          {saved ? <span className="text-sm text-signal">Preference saved.</span> : null}
+          {saved ? <span className="text-sm font-medium text-signal">Preference saved.</span> : null}
         </div>
       </div>
     </Card>

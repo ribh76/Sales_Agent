@@ -2,9 +2,9 @@ import type { AnalysisRunApi, CompanyMode } from "@/types/analysis";
 import type { LoginPayload, RegisterPayload, Token, User } from "@/types/auth";
 import type { CompanyInput } from "@/types/company";
 import type {
-  EvaluationProfile,
-  EvaluationResult,
-  EvaluationSummaryData,
+  EvaluationProfileApi,
+  EvaluationResultApi,
+  EvaluationSummaryApi,
   HumanPreference
 } from "@/types/evaluation";
 import { getStoredToken } from "./auth";
@@ -169,12 +169,12 @@ export function submitFeedback(payload: FeedbackPayload): Promise<unknown> {
   });
 }
 
-export function listEvaluationProfiles(): Promise<EvaluationProfile[]> {
-  return request<EvaluationProfile[]>("/evaluation/profiles", { auth: false });
+export function listEvaluationProfiles(): Promise<EvaluationProfileApi[]> {
+  return request<EvaluationProfileApi[]>("/evaluation/profiles", { auth: false });
 }
 
-export function runEvaluation(profileKey: string): Promise<EvaluationResult> {
-  return request<EvaluationResult>("/evaluation/run", {
+export function runEvaluation(profileKey: string): Promise<EvaluationResultApi> {
+  return request<EvaluationResultApi>("/evaluation/run", {
     method: "POST",
     auth: false,
     body: JSON.stringify({ profile_key: profileKey })
@@ -184,14 +184,14 @@ export function runEvaluation(profileKey: string): Promise<EvaluationResult> {
 export function rateEvaluationResult(
   resultId: number,
   payload: { human_preference: HumanPreference; notes?: string }
-): Promise<EvaluationResult> {
-  return request<EvaluationResult>(`/evaluation/results/${resultId}/rate`, {
+): Promise<EvaluationResultApi> {
+  return request<EvaluationResultApi>(`/evaluation/results/${resultId}/rate`, {
     method: "POST",
     auth: false,
     body: JSON.stringify(payload)
   });
 }
 
-export function getEvaluationSummary(): Promise<EvaluationSummaryData> {
-  return request<EvaluationSummaryData>("/evaluation/summary", { auth: false });
+export function getEvaluationSummary(): Promise<EvaluationSummaryApi> {
+  return request<EvaluationSummaryApi>("/evaluation/summary", { auth: false });
 }

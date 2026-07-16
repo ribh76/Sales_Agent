@@ -1,56 +1,61 @@
-import type { EvaluationResult, EvaluationSummaryData } from "@/types/evaluation";
-import { Badge } from "@/components/ui/Badge";
-import { ConfidenceMetricCard } from "./ConfidenceMetricCard";
+import type { EvaluationSummaryView } from "@/types/evaluation";
+import { Card } from "@/components/ui/Card";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
+
+const EMPTY_SUMMARY: EvaluationSummaryView = {
+  totalProfiles: 0,
+  profilesTested: 0,
+  totalEvaluations: 0,
+  confidencePassed: 0,
+  confidenceFailed: 0,
+  confidencePassRate: 0,
+  agentPreferred: 0,
+  baselinePreferred: 0,
+  ties: 0,
+};
 
 export function EvaluationSummary({
-  result,
-  summary
+  summary,
+  loading = false,
+  error = null,
 }: {
-  result: EvaluationResult;
-  summary: EvaluationSummaryData | null;
+  summary: EvaluationSummaryView | null;
+  loading?: boolean;
+  error?: string | null;
 }) {
-  const agent = result.scorecard.agent;
-  const baseline = result.scorecard.baseline;
+  const safeSummary = summary ?? EMPTY_SUMMARY;
+  const passRate = Number.isFinite(safeSummary.confidencePassRate)
+    ? safeSummary.confidencePassRate
+    : 0;
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Summary metrics</h2>
-        <Badge tone={result.confidence_pass ? "green" : "red"}>
-          Confidence {result.confidence_pass ? "pass" : "fail"}
-        </Badge>
+        <h2 className="text-base font-semibold">Evaluation Summary</h2>
+        {loading ? <span className="text-sm text-neutral-500">Refreshing summary...</span> : null}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ConfidenceMetricCard label="Agent specificity" value={agent.specificity} />
-        <ConfidenceMetricCard label="Agent actionability" value={agent.actionability} />
-        <ConfidenceMetricCard label="Baseline specificity" value={baseline.specificity} />
-        <ConfidenceMetricCard label="Baseline evidence" value={baseline.evidence_quality} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryCard label="Profiles Tested" value={safeSummary.profilesTested.toString()} />
+        <SummaryCard label="Confidence Pass Rate" value={`${Math.round(passRate * 100)}%`} />
+        <SummaryCard label="Agent Preferred" value={safeSummary.agentPreferred.toString()} />
+        <SummaryCard label="Baseline Preferred" value={safeSummary.baselinePreferred.toString()} />
+        <SummaryCard label="Ties" value={safeSummary.ties.toString()} />
       </div>
-      {summary ? (
-        <div className="grid gap-3 rounded-lg border border-line bg-white p-4 text-sm text-neutral-700 shadow-panel sm:grid-cols-3">
-          <Metric label="Total runs" value={summary.total_results.toString()} />
-          <Metric
-            label="Confidence pass rate"
-            value={summary.confidence_pass_rate === null ? "No data" : `${Math.round(summary.confidence_pass_rate * 100)}%`}
-          />
-          <Metric
-            label="Human preferences"
-            value={`Agent ${summary.human_preferences.agent} / Baseline ${summary.human_preferences.baseline} / Tie ${summary.human_preferences.tie}`}
-          />
-        </div>
+      <ErrorMessage message={error} />
+      {!summary && !loading ? (
+        <p className="text-sm text-neutral-600">
+          Run an evaluation and save a rating to update this summary.
+        </p>
       ) : null}
-      <p className="rounded-lg border border-line bg-white p-4 text-sm leading-6 text-neutral-700 shadow-panel">
-        {result.scorecard.summary}
-      </p>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <Card className="p-4">
       <div className="text-xs font-semibold uppercase text-neutral-500">{label}</div>
-      <div className="mt-1 font-medium text-ink">{value}</div>
-    </div>
+      <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
+    </Card>
   );
 }
