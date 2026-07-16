@@ -245,6 +245,23 @@ def test_run_full_analysis_uses_deterministic_output_without_llm(monkeypatch) ->
     assert result["agent_output"]["approach"]["sample_message"]
 
 
+def test_run_full_analysis_uses_deterministic_output_when_llm_returns_empty(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        analysis_pipeline,
+        "call_claude_json",
+        lambda prompt, use_web_search=False: {},
+    )
+    monkeypatch.setattr(analysis_pipeline.settings, "anthropic_api_key", "configured")
+
+    result = analysis_pipeline.run_full_analysis(NO_HISTORY_COMPANY_INPUT, mode="no_history")
+
+    assert result["status"] == "completed"
+    assert result["agent_output"]["icp"]["profile"]
+    assert result["agent_output"]["approach"]["sample_message"]
+
+
 def test_run_full_analysis_retries_once_when_agent_output_is_invalid(monkeypatch) -> None:
     responses = iter([{"unexpected": "shape"}, valid_agent_output()])
 

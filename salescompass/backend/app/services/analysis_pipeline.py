@@ -176,7 +176,7 @@ def generate_agent_output(
     if use_web_search and not raw_output:
         return _generate_from_demo_market_fallback(fallback_prompt or prompt, company)
 
-    if not raw_output and not settings.anthropic_api_key:
+    if not raw_output:
         return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
 
     try:
@@ -203,7 +203,7 @@ def validate_agent_output(raw_output: dict[str, Any], company: CompanyCreate) ->
 
 def _generate_from_demo_market_fallback(prompt: str, company: CompanyCreate) -> dict[str, Any]:
     raw_output = call_claude_json(prompt, use_web_search=False)
-    if not raw_output and not settings.anthropic_api_key:
+    if not raw_output:
         return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
 
     try:
