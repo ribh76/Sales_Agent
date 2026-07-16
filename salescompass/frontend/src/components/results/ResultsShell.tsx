@@ -71,6 +71,8 @@ export function ResultsShell({
         <FailedAnalysisState errorMessage={run.errorMessage} />
       ) : (
         <div className="grid gap-5">
+          {run.errorMessage ? <WorkflowWarning errorMessage={run.errorMessage} /> : null}
+
           <ICPCard icp={run.recommendedICP} diagnosis={run.diagnosis} />
 
           <ModeEvidenceCard
@@ -131,6 +133,21 @@ export function ResultsShell({
         </div>
       )}
     </div>
+  );
+}
+
+function WorkflowWarning({ errorMessage }: { errorMessage: string }) {
+  return (
+    <Card className="border-amber-200 bg-amber-50/50">
+      <h2 className="text-base font-semibold text-amber-950">Last workflow step needs attention</h2>
+      <p className="mt-2 text-sm leading-6 text-amber-900">
+        The recommendation is still available, but the backend reported an issue during the most
+        recent refinement or action-plan step.
+      </p>
+      <p className="mt-3 rounded-md bg-white px-3 py-2 text-sm leading-6 text-amber-900">
+        {errorMessage}
+      </p>
+    </Card>
   );
 }
 
