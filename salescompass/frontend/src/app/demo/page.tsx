@@ -48,7 +48,7 @@ export default function DemoPage() {
 
         <div className="grid gap-5 xl:grid-cols-[1fr_0.75fr]">
           <DiagnosisCard diagnosis={demoRun.diagnosis} confidence={demoRun.recommendedICP.confidence} />
-          <ICPCard icp={demoRun.recommendedICP} hypotheses={demoRun.hypothesesToValidate} />
+          <ICPCard icp={demoRun.recommendedICP} />
         </div>
 
         <section>
@@ -66,7 +66,9 @@ export default function DemoPage() {
         <div className="grid gap-5 lg:grid-cols-2">
           <ExternalBenchmarksCard benchmarks={demoRun.benchmarks} />
           <ActionPlanCard
+            summary={demoRun.actionPlan?.summary}
             steps={demoRun.actionPlan?.nextSteps ?? []}
+            messageVariations={demoRun.actionPlan?.messageVariations}
             metrics={demoRun.actionPlan?.metricsToTrack}
           />
         </div>
@@ -83,7 +85,7 @@ export default function DemoPage() {
           </p>
         </section>
 
-        <BaselineComparisonCard baseline={demoRun.baseline} agentIcp={demoRun.recommendedICP.profile} />
+        <BaselineComparisonCard baseline={demoRun.baseline} recommendedICP={demoRun.recommendedICP.profile} />
       </div>
     </AppShell>
   );

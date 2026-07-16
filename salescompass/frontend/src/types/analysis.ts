@@ -6,6 +6,8 @@ export type ConfidenceLevel = "low" | "medium" | "high";
 
 export type AnalysisStatus = "pending" | "completed" | "failed";
 
+export type ReviewStatus = "needs_review" | "approved";
+
 // Raw backend API types. Keep these aligned to JSON from /analyses.
 export type SegmentScoresApi = {
   size?: number;
@@ -68,8 +70,6 @@ export type BaselineOutputApi = {
     channel?: string;
     message?: string;
   };
-  recommended_icp?: string;
-  next_step?: string;
   [key: string]: unknown;
 };
 
@@ -86,9 +86,9 @@ export type AnalysisRunApi = {
   agent_output?: AgentOutputApi;
   baseline_output?: BaselineOutputApi;
   action_plan?: ActionPlanApi | null;
+  review_status?: ReviewStatus | string;
   refinement_notes?: string | null;
   error_message?: string | null;
-  result?: AgentOutputApi;
   model_name?: string;
   created_at?: string;
   updated_at?: string;
@@ -148,9 +148,43 @@ export type BaselineView = {
   outreachMessage: string;
 };
 
+export type EvidenceItemView = {
+  label: string;
+  value: string;
+};
+
+export type DowngradedSegmentView = {
+  name: string;
+  score: number;
+  rationale: string;
+};
+
+export type ModeEvidenceView = {
+  salesHistory: EvidenceItemView[];
+  wonLostPatterns: EvidenceItemView[];
+  conversionEvidence: EvidenceItemView[];
+  downgradedSegments: DowngradedSegmentView[];
+  marketAssumptions: EvidenceItemView[];
+  demoMarketContext: EvidenceItemView[];
+};
+
+export type ActionPlanStepView = {
+  title: string;
+  owner?: string;
+  timeframe?: string;
+  successMetric?: string;
+};
+
+export type ActionMessageVariationView = {
+  title: string;
+  channel: string;
+  message: string;
+};
+
 export type ActionPlanView = {
-  nextSteps: string[];
-  messageVariations: string[];
+  summary?: string;
+  nextSteps: ActionPlanStepView[];
+  messageVariations: ActionMessageVariationView[];
   metricsToTrack: string[];
 };
 
@@ -170,6 +204,8 @@ export type AnalysisViewModel = {
   hypothesesToValidate: string[];
   questionsForHuman: string[];
   baseline: BaselineView;
+  modeEvidence: ModeEvidenceView;
   actionPlan?: ActionPlanView;
+  reviewStatus: ReviewStatus;
   errorMessage?: string | null;
 };

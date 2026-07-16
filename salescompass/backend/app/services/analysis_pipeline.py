@@ -123,7 +123,9 @@ def generate_action_plan(
 
     hypotheses = agent_output.get("hypotheses_to_validate") or []
     questions = agent_output.get("questions_for_human") or []
-    sample_message = (agent_output.get("approach") or {}).get("sample_message")
+    approach = agent_output.get("approach") or {}
+    sample_message = approach.get("sample_message")
+    outreach_channel = approach.get("channel") or "Email"
     next_steps = [
         f"Validate hypothesis: {hypothesis}" for hypothesis in hypotheses[:3]
     ] or ["Review the ICP recommendation and choose the first validation segment."]
@@ -139,6 +141,26 @@ def generate_action_plan(
                 "success_metric": "Completed with evidence captured",
             }
             for step in next_steps
+        ],
+        "message_variations": [
+            {
+                "title": "Primary ICP pain",
+                "channel": outreach_channel,
+                "message": sample_message
+                or "Reference the top ICP pain and ask for a short validation conversation.",
+            },
+            {
+                "title": "Trigger event",
+                "channel": outreach_channel,
+                "message": (
+                    "Lead with the highest-signal trigger event and ask whether the problem is urgent now."
+                ),
+            },
+        ],
+        "metrics_to_track": [
+            "Qualified replies from target accounts",
+            "Validation calls booked",
+            "Pain-confirmed opportunities created",
         ],
         "risks": questions,
     }

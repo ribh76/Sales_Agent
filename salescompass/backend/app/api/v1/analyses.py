@@ -187,6 +187,20 @@ async def list_analysis_feedback(
     )
 
 
+@router.post("/{run_id}/approve", response_model=ICPRunRead)
+async def approve_analysis(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ICPRun:
+    run = get_owned_run(db, run_id, current_user.id)
+    run.review_status = "approved"
+    run.error_message = None
+    db.commit()
+    db.refresh(run)
+    return run
+
+
 @router.post("/{run_id}/refine", response_model=ICPRunRead)
 async def refine_analysis(
     run_id: int,
@@ -208,15 +222,21 @@ async def refine_analysis(
             run.agent_output,
             payload.notes,
         )
+        baseline = await run_in_threadpool(generate_baseline, company_payload, company_input.mode)
     except AgentOutputValidationError as exc:
-        run.status = "failed"
         run.error_message = str(exc)
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Analysis output failed validation",
         ) from exc
-    baseline = await run_in_threadpool(generate_baseline, company_payload, company_input.mode)
+    except Exception as exc:
+        run.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Refinement failed. Your current recommendation is unchanged.",
+        ) from exc
 
     run.status = "completed"
     run.mode = company_input.mode
@@ -224,6 +244,7 @@ async def refine_analysis(
     run.agent_output = result_data
     run.baseline_output = baseline
     run.action_plan = result_data.get("approach")
+    run.review_status = "needs_review"
     run.refinement_notes = payload.notes
     run.error_message = None
 
@@ -239,11 +260,21 @@ async def create_action_plan(
     current_user: User = Depends(get_current_user),
 ) -> ActionPlanResponse:
     run = get_owned_run(db, run_id, current_user.id)
-    action_plan = await run_in_threadpool(
-        generate_ai_action_plan,
-        run.input_snapshot,
-        run.agent_output,
-    )
+    try:
+        action_plan = await run_in_threadpool(
+            generate_ai_action_plan,
+            run.input_snapshot,
+            run.agent_output,
+        )
+    except Exception as exc:
+        run.error_message = str(exc)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Action plan failed. Your approved recommendation is unchanged.",
+        ) from exc
+
     run.action_plan = action_plan
+    run.error_message = None
     db.commit()
     return ActionPlanResponse(run_id=run.id, action_plan=action_plan)

@@ -11,6 +11,10 @@ class ICPRun(Base):
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'completed', 'failed')", name="ck_icp_runs_status"),
         CheckConstraint("mode IN ('history', 'no_history')", name="ck_icp_runs_mode"),
+        CheckConstraint(
+            "review_status IN ('needs_review', 'approved')",
+            name="ck_icp_runs_review_status",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -22,6 +26,7 @@ class ICPRun(Base):
     agent_output = Column(JSONBType, default=dict, nullable=False)
     baseline_output = Column(JSONBType, default=dict, nullable=False)
     action_plan = Column(JSONBType, nullable=True)
+    review_status = Column(String(30), default="needs_review", nullable=False, index=True)
     refinement_notes = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

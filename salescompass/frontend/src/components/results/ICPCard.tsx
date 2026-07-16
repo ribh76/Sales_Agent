@@ -5,13 +5,13 @@ import { ConfidenceBadge } from "./ConfidenceBadge";
 
 export function ICPCard({
   icp,
-  hypotheses
+  diagnosis
 }: {
   icp: RecommendedICPView;
-  hypotheses: string[];
+  diagnosis?: string;
 }) {
   return (
-    <Card>
+    <Card className="border-signal/30">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Target aria-hidden className="h-5 w-5 text-signal" />
@@ -19,7 +19,12 @@ export function ICPCard({
         </div>
         <ConfidenceBadge value={icp.confidence} />
       </div>
-      <p className="mt-3 text-lg font-semibold leading-7 text-ink">{icp.profile}</p>
+      <p className="mt-3 text-xl font-semibold leading-8 text-ink">{icp.profile}</p>
+      {diagnosis ? (
+        <p className="mt-3 rounded-md bg-teal-50 px-3 py-3 text-sm leading-6 text-teal-950">
+          {diagnosis}
+        </p>
+      ) : null}
       <div className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-2">
         <Detail label="Industry" value={icp.industry} />
         <Detail label="Company size" value={icp.companySize} />
@@ -31,15 +36,6 @@ export function ICPCard({
         <p className="mt-1">{icp.rationale}</p>
         <p className="mt-2 text-neutral-600">{icp.confidenceBasis}</p>
       </div>
-      {hypotheses.length > 0 ? (
-        <ul className="mt-4 grid gap-2 text-sm text-neutral-700">
-          {hypotheses.map((item) => (
-            <li key={item} className="rounded-md bg-field px-3 py-2">
-              {item}
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </Card>
   );
 }

@@ -1,87 +1,182 @@
-import type { AnalysisViewModel } from "@/types/analysis";
+"use client";
+
+import { useState } from "react";
+import type { AnalysisRunApi, AnalysisViewModel } from "@/types/analysis";
+import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Card } from "@/components/ui/Card";
 import { formatDate } from "@/lib/formatters";
+import { generateActionPlan } from "@/lib/api";
 import { ActionPlanCard } from "./ActionPlanCard";
 import { BaselineComparisonCard } from "./BaselineComparisonCard";
-import { DiagnosisCard } from "./DiagnosisCard";
 import { ExternalBenchmarksCard } from "./ExternalBenchmarksCard";
 import { HumanCheckpoint } from "./HumanCheckpoint";
 import { ICPCard } from "./ICPCard";
 import { MarketScoresChart } from "./MarketScoresChart";
 import { MessageVariations } from "./MessageVariations";
+import { ModeEvidenceCard } from "./ModeEvidenceCard";
 import { SegmentScoreCard } from "./SegmentScoreCard";
 
-export function ResultsShell({ run }: { run: AnalysisViewModel }) {
+export function ResultsShell({
+  run,
+  onRefresh,
+  onRunUpdated
+}: {
+  run: AnalysisViewModel;
+  onRefresh: () => Promise<AnalysisViewModel | null>;
+  onRunUpdated: (apiRun: AnalysisRunApi) => AnalysisViewModel;
+}) {
+  const [generatingActionPlan, setGeneratingActionPlan] = useState(false);
+  const [actionPlanError, setActionPlanError] = useState<string | null>(null);
+  const [actionPlanMessage, setActionPlanMessage] = useState<string | null>(null);
   const checkpoint =
     run.questionsForHuman.length > 0
-      ? run.questionsForHuman.join(" ")
+      ? run.questionsForHuman[0]
       : run.recommendedICP.confidenceBasis;
-  const actionSteps =
-    run.actionPlan?.nextSteps.length ? run.actionPlan.nextSteps : run.hypothesesToValidate;
+  const isApproved = run.reviewStatus === "approved";
+
+  async function handleGenerateActionPlan() {
+    if (!isApproved) {
+      setActionPlanError("Approve the recommendation first, then generate the action plan.");
+      return;
+    }
+
+    setGeneratingActionPlan(true);
+    setActionPlanError(null);
+    setActionPlanMessage(null);
+    try {
+      await generateActionPlan(run.runId);
+      await onRefresh();
+      setActionPlanMessage("Action plan generated. The workflow is ready for execution.");
+    } catch {
+      setActionPlanError(
+        "The action plan did not generate. The approved recommendation is still safe."
+      );
+    } finally {
+      setGeneratingActionPlan(false);
+    }
+  }
 
   return (
     <div>
-      <PageHeader eyebrow="ICP Run" title={run.companyName ?? `Analysis #${run.runId}`}>
-        {run.status === "completed" ? "Completed" : formatStatus(run.status)}{" "}
-        {run.createdAt ? formatDate(run.createdAt) : ""}
+      <PageHeader
+        eyebrow="Live workflow result"
+        title={run.companyName ?? `Analysis #${run.runId}`}
+        action={<Badge tone={statusTone(run.status)}>{formatStatus(run.status)}</Badge>}
+      >
+        {run.createdAt ? `Created ${formatDate(run.createdAt)}` : "Normalized ICP recommendation"}
       </PageHeader>
 
-      <div className="grid gap-5">
-        <div className="grid gap-5 xl:grid-cols-[1fr_0.75fr]">
-          <DiagnosisCard diagnosis={run.diagnosis} confidence={run.recommendedICP.confidence} />
-          <ICPCard icp={run.recommendedICP} hypotheses={run.hypothesesToValidate} />
-        </div>
+      {run.status === "failed" ? (
+        <FailedAnalysisState errorMessage={run.errorMessage} />
+      ) : (
+        <div className="grid gap-5">
+          <ICPCard icp={run.recommendedICP} diagnosis={run.diagnosis} />
 
-        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-          <section>
-            <h2 className="mb-3 text-base font-semibold">Top Candidate Segments</h2>
-            <MarketScoresChart segments={run.markets} />
-          </section>
-          <div className="grid content-start gap-3">
-            {run.markets.slice(0, 3).map((segment) => (
-              <SegmentScoreCard key={segment.name} segment={segment} />
-            ))}
-          </div>
-        </div>
-
-        <div className="grid gap-5 lg:grid-cols-2">
-          <ActionPlanCard
-            steps={actionSteps}
-            metrics={run.actionPlan?.metricsToTrack}
+          <ModeEvidenceCard
+            mode={run.mode}
+            evidence={run.modeEvidence}
+            confidence={run.recommendedICP.confidence}
+            confidenceBasis={run.recommendedICP.confidenceBasis}
+            hypotheses={run.hypothesesToValidate}
+            questions={run.questionsForHuman}
           />
+
+          <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <MarketScoresChart segments={run.markets} title="Candidate Market Scores" />
+            <div className="grid content-start gap-3">
+              {run.markets.length > 0 ? (
+                run.markets
+                  .slice(0, 3)
+                  .map((segment) => <SegmentScoreCard key={segment.name} segment={segment} />)
+              ) : (
+                <NoCandidateMarketsCard />
+              )}
+            </div>
+          </div>
+
           <ExternalBenchmarksCard benchmarks={run.benchmarks} />
+
+          <MessageVariations
+            outreach={run.outreach}
+            variations={run.actionPlan?.messageVariations}
+          />
+
+          <BaselineComparisonCard
+            baseline={run.baseline}
+            recommendedICP={run.recommendedICP.profile}
+          />
+
+          <HumanCheckpoint
+            runId={run.runId}
+            prompt={checkpoint}
+            questions={run.questionsForHuman}
+            hypotheses={run.hypothesesToValidate}
+            reviewStatus={run.reviewStatus}
+            onRefresh={onRefresh}
+            onRunUpdated={onRunUpdated}
+          />
+
+          <ActionPlanCard
+            summary={run.actionPlan?.summary}
+            steps={run.actionPlan?.nextSteps ?? []}
+            messageVariations={run.actionPlan?.messageVariations}
+            metrics={run.actionPlan?.metricsToTrack}
+            canGenerate={isApproved}
+            generating={generatingActionPlan}
+            generationError={actionPlanError}
+            generationMessage={actionPlanMessage}
+            onGenerate={handleGenerateActionPlan}
+          />
         </div>
-
-        <MessageVariations
-          outreach={run.outreach}
-          variations={run.actionPlan?.messageVariations}
-        />
-
-        <div className="grid gap-5 lg:grid-cols-2">
-          <HumanCheckpoint runId={run.runId} prompt={checkpoint} />
-          <section className="rounded-lg border border-line bg-white p-5 shadow-panel">
-            <h2 className="text-base font-semibold">Questions for human</h2>
-            <ul className="mt-3 grid gap-2 text-sm text-neutral-700">
-              {run.questionsForHuman.map((item) => (
-                <li key={item} className="rounded-md bg-field px-3 py-2">
-                  {item}
-                </li>
-              ))}
-              {run.questionsForHuman.length === 0 ? (
-                <li className="rounded-md bg-field px-3 py-2">
-                  No follow-up questions returned.
-                </li>
-              ) : null}
-            </ul>
-          </section>
-        </div>
-
-        <BaselineComparisonCard baseline={run.baseline} agentIcp={run.recommendedICP.profile} />
-      </div>
+      )}
     </div>
+  );
+}
+
+function FailedAnalysisState({ errorMessage }: { errorMessage?: string | null }) {
+  return (
+    <Card className="border-red-200 bg-red-50/40">
+      <h2 className="text-base font-semibold text-red-950">Analysis failed</h2>
+      <p className="mt-2 text-sm leading-6 text-red-900">
+        SalesCompass could not produce a usable recommendation for this workflow result. The
+        submitted company inputs are still stored, but this run needs to be rerun before it can
+        show ICP, market, outreach, and action-plan sections.
+      </p>
+      <div className="mt-4 rounded-md border border-red-200 bg-white px-3 py-3">
+        <div className="text-xs font-semibold uppercase text-red-700">Stored backend error</div>
+        <p className="mt-2 text-sm leading-6 text-red-900">
+          {errorMessage?.trim() || "No backend error was stored for this failed analysis."}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function NoCandidateMarketsCard() {
+  return (
+    <Card>
+      <h3 className="text-sm font-semibold">No candidate markets returned</h3>
+      <p className="mt-2 text-sm leading-6 text-neutral-600">
+        This run did not return scored markets. Use Human Checkpoint to request a refinement with
+        the market, buyer, or pain you want SalesCompass to test.
+      </p>
+    </Card>
   );
 }
 
 function formatStatus(status: AnalysisViewModel["status"]) {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function statusTone(status: AnalysisViewModel["status"]) {
+  if (status === "completed") {
+    return "green";
+  }
+
+  if (status === "failed") {
+    return "red";
+  }
+
+  return "amber";
 }

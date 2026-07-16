@@ -28,6 +28,47 @@ type FeedbackPayload = {
   notes?: string;
 };
 
+type ActionPlanResponse = {
+  run_id: number;
+  action_plan: Record<string, unknown> | unknown[];
+};
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+function formatErrorDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string" && detail.trim()) {
+    return detail.trim();
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        if (item && typeof item === "object" && "msg" in item) {
+          const message = (item as { msg?: unknown }).msg;
+          return typeof message === "string" ? message : undefined;
+        }
+
+        return undefined;
+      })
+      .filter((item): item is string => Boolean(item));
+    return messages.length ? messages.join(" ") : undefined;
+  }
+
+  return undefined;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -50,14 +91,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     let message = `Request failed with ${response.status}`;
     try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) {
-        message = payload.detail;
+      const payload = (await response.json()) as { detail?: unknown };
+      const detail = formatErrorDetail(payload.detail);
+      if (detail) {
+        message = detail;
       }
     } catch {
       // Keep the status-based fallback.
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   return response.json() as Promise<T>;
@@ -99,6 +141,25 @@ export function listAnalyses(): Promise<AnalysisRunApi[]> {
 
 export function getAnalysis(runId: string | number): Promise<AnalysisRunApi> {
   return request<AnalysisRunApi>(`/analyses/${runId}`);
+}
+
+export function approveAnalysis(runId: string | number): Promise<AnalysisRunApi> {
+  return request<AnalysisRunApi>(`/analyses/${runId}/approve`, {
+    method: "POST"
+  });
+}
+
+export function refineAnalysis(runId: string | number, notes: string): Promise<AnalysisRunApi> {
+  return request<AnalysisRunApi>(`/analyses/${runId}/refine`, {
+    method: "POST",
+    body: JSON.stringify({ notes })
+  });
+}
+
+export function generateActionPlan(runId: string | number): Promise<ActionPlanResponse> {
+  return request<ActionPlanResponse>(`/analyses/${runId}/action-plan`, {
+    method: "POST"
+  });
 }
 
 export function submitFeedback(payload: FeedbackPayload): Promise<unknown> {

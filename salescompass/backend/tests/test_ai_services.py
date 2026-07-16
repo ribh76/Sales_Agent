@@ -149,6 +149,8 @@ def test_prompt_builders_keep_route_specific_prompts_isolated() -> None:
     assert "1 to 10" in analysis_prompt
     assert "Focus logistics" in refine_prompt
     assert "execution-ready sales action plan" in action_plan_prompt
+    assert "message_variations" in action_plan_prompt
+    assert "metrics_to_track" in action_plan_prompt
     assert "Buyer was not senior enough" in feedback_prompt
 
 

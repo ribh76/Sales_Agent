@@ -1,4 +1,4 @@
-import type { OutreachView } from "@/types/analysis";
+import type { ActionMessageVariationView, OutreachView } from "@/types/analysis";
 import { OutreachCard } from "./OutreachCard";
 
 export function MessageVariations({
@@ -6,7 +6,7 @@ export function MessageVariations({
   variations = []
 }: {
   outreach: OutreachView;
-  variations?: string[];
+  variations?: ActionMessageVariationView[];
 }) {
   return (
     <section>
@@ -25,12 +25,12 @@ export function MessageVariations({
           message={`${outreach.trigger} ${outreach.confidenceBasis}`}
         />
         {variations.length > 0 ? (
-          variations.map((message, index) => (
+          variations.map((variation, index) => (
             <OutreachCard
-              key={`${message}-${index}`}
-              title={`Variation ${index + 1}`}
-              channel={outreach.channel}
-              message={message}
+              key={`${variation.title}-${index}`}
+              title={variation.title}
+              channel={variation.channel}
+              message={variation.message}
             />
           ))
         ) : (

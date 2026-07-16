@@ -1,6 +1,8 @@
 import type {
   ActionPlanApi,
+  ActionPlanStepView,
   ActionPlanView,
+  ActionMessageVariationView,
   AnalysisRunApi,
   AnalysisStatus,
   AnalysisViewModel,
@@ -10,16 +12,57 @@ import type {
   BenchmarkView,
   CompanyMode,
   ConfidenceLevel,
+  DowngradedSegmentView,
+  EvidenceItemView,
   ICPOutputApi,
   MarketSegmentApi,
   MarketSegmentView,
+  ModeEvidenceView,
   OutreachOutputApi,
   OutreachView,
   RecommendedICPView,
+  ReviewStatus,
   SegmentScoresView,
 } from "@/types/analysis";
 
 const DEFAULT_CONFIDENCE: ConfidenceLevel = "medium";
+
+const DEMO_MARKET_CONTEXT: Record<string, EvidenceItemView[]> = {
+  manufacturing: [
+    { label: "Market size", value: "Large industrial market with recurring operational pain." },
+    { label: "Sales cycle", value: "Typically 30-90 days for mid-market services." },
+    { label: "Competition", value: "Moderate competition from consultants and software vendors." },
+  ],
+  healthcare: [
+    { label: "Market size", value: "Large regulated market with persistent workflow and access pressure." },
+    { label: "Sales cycle", value: "Typically 60-180 days depending on compliance and procurement needs." },
+    { label: "Competition", value: "High competition from vertical SaaS vendors and services firms." },
+  ],
+  logistics: [
+    { label: "Market size", value: "Large operational market with recurring cost, routing, and visibility pain." },
+    { label: "Sales cycle", value: "Typically 30-120 days for mid-market operations teams." },
+    { label: "Competition", value: "Moderate competition from point solutions, brokers, and consultants." },
+  ],
+  "real estate": [
+    { label: "Market size", value: "Cyclical but large market with fragmented operators and local workflows." },
+    { label: "Sales cycle", value: "Typically 30-90 days for teams with clear transaction or leasing pain." },
+    { label: "Competition", value: "Moderate competition from brokerage tools, CRMs, and service providers." },
+  ],
+  general: [
+    {
+      label: "Demo market context",
+      value: "Use a narrow, testable market definition until stronger evidence is available.",
+    },
+    {
+      label: "Validation cycle",
+      value: "Assume a short validation cycle before committing to a scaled sales motion.",
+    },
+    {
+      label: "Competitive assumptions",
+      value: "Validate alternatives directly with prospects before positioning against competitors.",
+    },
+  ],
+};
 
 function asString(value: unknown, fallback: string): string {
   if (typeof value === "string" && value.trim().length > 0) {
@@ -42,6 +85,92 @@ function asNumber(value: unknown, fallback: number): number {
   }
 
   return fallback;
+}
+
+function asDisplayString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value
+      .map(asDisplayString)
+      .filter((item): item is string => Boolean(item));
+    return parts.length ? parts.join(", ") : undefined;
+  }
+
+  if (value && typeof value === "object") {
+    const parts = Object.entries(value)
+      .map(([key, nestedValue]) => {
+        const displayValue = asDisplayString(nestedValue);
+        return displayValue ? `${formatEvidenceLabel(key)}: ${displayValue}` : undefined;
+      })
+      .filter((item): item is string => Boolean(item));
+    return parts.length ? parts.join("; ") : undefined;
+  }
+
+  return undefined;
+}
+
+function evidenceItem(
+  source: Record<string, unknown> | undefined,
+  key: string,
+  label: string,
+  formatter: (value: unknown) => string | undefined = asDisplayString
+): EvidenceItemView | undefined {
+  const value = source?.[key];
+  const displayValue = formatter(value);
+  return displayValue ? { label, value: displayValue } : undefined;
+}
+
+function compactEvidence(items: Array<EvidenceItemView | undefined>): EvidenceItemView[] {
+  return items.filter((item): item is EvidenceItemView => Boolean(item));
+}
+
+function formatCurrencyValue(value: unknown): string | undefined {
+  const numericValue = asNumber(value, Number.NaN);
+  if (!Number.isFinite(numericValue)) {
+    return asDisplayString(value);
+  }
+
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(numericValue);
+}
+
+function formatPercentValue(value: unknown): string | undefined {
+  const numericValue = asNumber(value, Number.NaN);
+  if (!Number.isFinite(numericValue)) {
+    return asDisplayString(value);
+  }
+
+  return numericValue <= 1 ? `${Math.round(numericValue * 100)}%` : `${numericValue}%`;
+}
+
+function formatDaysValue(value: unknown): string | undefined {
+  const numericValue = asNumber(value, Number.NaN);
+  if (!Number.isFinite(numericValue)) {
+    return asDisplayString(value);
+  }
+
+  return `${numericValue} days`;
+}
+
+function formatEvidenceLabel(value: string): string {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function clampScore(value: unknown, fallback = 5): number {
@@ -79,6 +208,10 @@ function normalizeMode(value: unknown): CompanyMode {
   return "history";
 }
 
+function normalizeReviewStatus(value: unknown): ReviewStatus {
+  return value === "approved" ? "approved" : "needs_review";
+}
+
 function normalizeList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -99,6 +232,79 @@ function normalizeList(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function adaptActionStep(value: unknown, index: number): ActionPlanStepView | undefined {
+  if (typeof value === "string") {
+    const title = value.trim();
+    return title ? { title } : undefined;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const title = asString(recordValue(value, "title"), `GTM step ${index + 1}`);
+
+  return {
+    title,
+    owner: optionalString(recordValue(value, "owner")),
+    timeframe: optionalString(recordValue(value, "timeframe")),
+    successMetric: optionalString(recordValue(value, "success_metric")),
+  };
+}
+
+function adaptActionSteps(value: unknown): ActionPlanStepView[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(adaptActionStep)
+    .filter((item): item is ActionPlanStepView => Boolean(item));
+}
+
+function adaptMessageVariation(value: unknown, index: number): ActionMessageVariationView | undefined {
+  if (typeof value === "string") {
+    const message = value.trim();
+    return message
+      ? { title: `Message variation ${index + 1}`, channel: "Email", message }
+      : undefined;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const message = optionalString(recordValue(value, "message"));
+  if (!message) {
+    return undefined;
+  }
+
+  return {
+    title: asString(recordValue(value, "title"), `Message variation ${index + 1}`),
+    channel: asString(recordValue(value, "channel"), "Email"),
+    message,
+  };
+}
+
+function adaptMessageVariations(value: unknown): ActionMessageVariationView[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(adaptMessageVariation)
+    .filter((item): item is ActionMessageVariationView => Boolean(item));
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
 function recordValue(value: unknown, key: string): unknown {
@@ -222,24 +428,126 @@ function adaptActionPlan(actionPlan?: ActionPlanApi | null): ActionPlanView | un
 
   if (Array.isArray(actionPlan)) {
     return {
-      nextSteps: normalizeList(actionPlan),
+      nextSteps: adaptActionSteps(actionPlan),
       messageVariations: [],
       metricsToTrack: [],
     };
   }
 
   return {
-    nextSteps: normalizeList(recordValue(actionPlan, "next_steps")),
-    messageVariations: normalizeList(recordValue(actionPlan, "message_variations")),
+    summary: optionalString(recordValue(actionPlan, "summary")),
+    nextSteps: adaptActionSteps(recordValue(actionPlan, "next_steps")),
+    messageVariations: adaptMessageVariations(recordValue(actionPlan, "message_variations")),
     metricsToTrack: normalizeList(recordValue(actionPlan, "metrics_to_track")),
   };
 }
 
-export function adaptAnalysisRun(apiRun: AnalysisRunApi): AnalysisViewModel {
-  const agent = apiRun.agent_output ?? apiRun.result ?? {};
+function adaptModeEvidence(
+  apiRun: AnalysisRunApi,
+  markets: MarketSegmentView[]
+): ModeEvidenceView {
+  const snapshot = apiRun.input_snapshot;
+  const salesHistory = compactEvidence([
+    evidenceItem(snapshot, "customer_history", "Customer history"),
+    evidenceItem(snapshot, "past_clients", "Won customer patterns"),
+    evidenceItem(snapshot, "current_markets", "Current markets"),
+  ]);
+  const wonLostPatterns = compactEvidence([
+    evidenceItem(snapshot, "past_clients", "Won patterns"),
+    evidenceItem(snapshot, "past_lost_deals", "Lost deal patterns"),
+    evidenceItem(snapshot, "loss_reasons", "Loss reasons"),
+  ]);
+  const conversionEvidence = compactEvidence([
+    evidenceItem(snapshot, "average_ticket", "Average ticket", formatCurrencyValue),
+    evidenceItem(snapshot, "average_contract_value", "Average contract value", formatCurrencyValue),
+    evidenceItem(snapshot, "conversion_rate", "Conversion rate", formatPercentValue),
+    evidenceItem(snapshot, "average_sales_cycle", "Average sales cycle", formatDaysValue),
+    evidenceItem(snapshot, "margin", "Margin", formatPercentValue),
+  ]);
+  const marketAssumptions = compactEvidence([
+    evidenceItem(snapshot, "industry", "Assumed market"),
+    evidenceItem(snapshot, "problem_solved", "Problem solved"),
+    evidenceItem(snapshot, "target_user_guess", "Target user guess"),
+    evidenceItem(snapshot, "hypothetical_ticket", "Hypothetical ticket", formatCurrencyValue),
+    evidenceItem(snapshot, "average_contract_value", "Estimated contract value", formatCurrencyValue),
+    evidenceItem(snapshot, "known_competitors", "Known competitors"),
+    evidenceItem(snapshot, "early_leads", "Early leads"),
+  ]);
 
-  const markets = Array.isArray(agent.markets)
-    ? agent.markets.slice(0, 3).map(adaptMarket)
+  return {
+    salesHistory: salesHistory.length
+      ? salesHistory
+      : [
+          {
+            label: "Sales history",
+            value: "No detailed sales history was supplied with this run.",
+          },
+        ],
+    wonLostPatterns: wonLostPatterns.length
+      ? wonLostPatterns
+      : [
+          {
+            label: "Won/lost patterns",
+            value: "No explicit won/lost pattern evidence was supplied.",
+          },
+        ],
+    conversionEvidence: conversionEvidence.length
+      ? conversionEvidence
+      : [
+          {
+            label: "Conversion and sales cycle",
+            value: "No conversion or sales-cycle metrics supplied; scoring leans on qualitative evidence.",
+          },
+        ],
+    downgradedSegments: adaptDowngradedSegments(markets),
+    marketAssumptions: marketAssumptions.length
+      ? marketAssumptions
+      : [
+          {
+            label: "Market assumptions",
+            value: "No customer history supplied; validate the market definition before scaling.",
+          },
+        ],
+    demoMarketContext: adaptDemoMarketContext(snapshot),
+  };
+}
+
+function adaptDowngradedSegments(markets: MarketSegmentView[]): DowngradedSegmentView[] {
+  return markets.slice(1).map((market) => ({
+    name: market.name,
+    score: market.total,
+    rationale: market.rationale,
+  }));
+}
+
+function adaptDemoMarketContext(snapshot?: Record<string, unknown>): EvidenceItemView[] {
+  const haystack = [
+    snapshot?.industry,
+    snapshot?.description,
+    snapshot?.current_markets,
+    snapshot?.early_leads,
+    snapshot?.known_competitors,
+    snapshot?.problem_solved,
+    snapshot?.target_user_guess,
+  ]
+    .map(asDisplayString)
+    .filter((item): item is string => Boolean(item))
+    .join(" ")
+    .toLowerCase();
+
+  const matchedKey = Object.keys(DEMO_MARKET_CONTEXT).find(
+    (key) => key !== "general" && haystack.includes(key)
+  );
+
+  return DEMO_MARKET_CONTEXT[matchedKey ?? "general"];
+}
+
+export function adaptAnalysisRun(apiRun: AnalysisRunApi): AnalysisViewModel {
+  const output = apiRun.agent_output ?? {};
+  const mode = normalizeMode(apiRun.mode);
+
+  const markets = Array.isArray(output.markets)
+    ? output.markets.slice(0, 3).map(adaptMarket)
     : [];
 
   return {
@@ -247,29 +555,33 @@ export function adaptAnalysisRun(apiRun: AnalysisRunApi): AnalysisViewModel {
     companyId: typeof apiRun.company_id === "number" ? apiRun.company_id : undefined,
     companyName: getAnalysisCompanyName(apiRun),
     status: normalizeStatus(apiRun.status),
-    mode: normalizeMode(apiRun.mode),
+    mode,
     createdAt: apiRun.created_at,
 
     diagnosis: asString(
-      agent.diagnosis,
+      output.diagnosis,
       "SalesCompass analyzed the submitted company profile and generated an ICP recommendation."
     ),
 
-    benchmarks: adaptBenchmarks(agent.external_benchmarks),
+    benchmarks: adaptBenchmarks(output.external_benchmarks),
 
     markets,
 
-    recommendedICP: adaptICP(agent.icp),
+    recommendedICP: adaptICP(output.icp),
 
-    outreach: adaptOutreach(agent.approach),
+    outreach: adaptOutreach(output.approach),
 
-    hypothesesToValidate: normalizeList(agent.hypotheses_to_validate),
+    hypothesesToValidate: normalizeList(output.hypotheses_to_validate),
 
-    questionsForHuman: normalizeList(agent.questions_for_human),
+    questionsForHuman: normalizeList(output.questions_for_human),
 
     baseline: adaptBaseline(apiRun.baseline_output),
 
+    modeEvidence: adaptModeEvidence(apiRun, markets),
+
     actionPlan: adaptActionPlan(apiRun.action_plan),
+
+    reviewStatus: normalizeReviewStatus(apiRun.review_status),
 
     errorMessage: apiRun.error_message ?? null,
   };

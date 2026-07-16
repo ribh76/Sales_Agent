@@ -98,12 +98,13 @@ class ICPRunRead(BaseModel):
     status: str
     mode: str
     input_snapshot: dict[str, Any]
-    agent_output: AnalysisResult
+    agent_output: AnalysisResult | dict[str, Any]
     baseline_output: dict[str, Any]
     action_plan: dict[str, Any] | list[Any] | None = None
+    review_status: str = "needs_review"
     refinement_notes: str | None = None
     error_message: str | None = None
-    result: AnalysisResult
+    result: AnalysisResult | dict[str, Any]
     model_name: str
     created_at: datetime
     updated_at: datetime

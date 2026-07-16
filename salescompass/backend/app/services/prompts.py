@@ -135,6 +135,14 @@ Return only JSON with this shape:
       "success_metric": "string"
     }}
   ],
+  "message_variations": [
+    {{
+      "title": "string",
+      "channel": "string",
+      "message": "string"
+    }}
+  ],
+  "metrics_to_track": ["string"],
   "risks": ["string"]
 }}
 """
