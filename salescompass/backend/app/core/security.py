@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -28,8 +29,7 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
 def decode_access_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-    except JWTError:
+    except PyJWTError:
         return None
     subject = payload.get("sub")
     return subject if isinstance(subject, str) else None
-

@@ -112,6 +112,17 @@ def test_call_claude_json_returns_empty_dict_for_malformed_json(monkeypatch) -> 
     assert anthropic_client.call_claude_json("Return JSON") == {}
 
 
+def test_call_claude_json_returns_empty_dict_for_provider_exception(monkeypatch) -> None:
+    class FakeMessages:
+        def create(self, **kwargs):
+            raise RuntimeError("authentication failed")
+
+    fake_client = SimpleNamespace(messages=FakeMessages())
+    monkeypatch.setattr(anthropic_client, "get_anthropic_client", lambda: fake_client)
+
+    assert anthropic_client.call_claude_json("Return JSON") == {}
+
+
 def test_anthropic_icp_client_uses_demo_fallback_when_web_search_breaks(monkeypatch) -> None:
     calls: list[bool] = []
     prompts: list[str] = []
@@ -277,19 +288,20 @@ def test_run_full_analysis_retries_once_when_agent_output_is_invalid(monkeypatch
     assert result["agent_output"]["icp"]["confidence"] == "high"
 
 
-def test_run_full_analysis_raises_controlled_error_after_retry(monkeypatch) -> None:
+def test_run_full_analysis_uses_warning_fallback_after_repeated_invalid_agent_output(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(
         analysis_pipeline,
         "call_claude_json",
         lambda prompt, use_web_search=False: {"unexpected": "shape"},
     )
 
-    try:
-        analysis_pipeline.run_full_analysis(COMPANY_INPUT, mode="history")
-    except AgentOutputValidationError as exc:
-        assert "after retry" in str(exc)
-    else:
-        raise AssertionError("Expected AgentOutputValidationError")
+    result = analysis_pipeline.run_full_analysis(COMPANY_INPUT, mode="history")
+
+    assert result["status"] == "completed"
+    assert result["agent_output"]["icp"]["profile"]
+    assert result["warning"] == analysis_pipeline.MALFORMED_CLAUDE_JSON_WARNING
 
 
 def test_validate_agent_output_rejects_invalid_scores() -> None:

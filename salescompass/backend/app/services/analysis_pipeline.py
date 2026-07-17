@@ -32,6 +32,26 @@ class SegmentTemplate:
     deal_quality: int
 
 
+@dataclass(frozen=True)
+class GeneratedAnalysis:
+    output: dict[str, Any]
+    warning: str | None = None
+
+
+MISSING_ANTHROPIC_KEY_WARNING = (
+    "Anthropic API key is not configured. SalesCompass used deterministic fallback analysis "
+    "with demo market context, so the recommendation is available but does not include live Claude output."
+)
+UNAVAILABLE_CLAUDE_WARNING = (
+    "Claude was unavailable or returned no usable output. SalesCompass used deterministic fallback "
+    "analysis with demo market context, so the recommendation is available for review."
+)
+MALFORMED_CLAUDE_JSON_WARNING = (
+    "Claude returned malformed analysis JSON. SalesCompass used deterministic fallback analysis "
+    "with demo market context, so the recommendation is available for review."
+)
+
+
 SEGMENTS: tuple[SegmentTemplate, ...] = (
     SegmentTemplate(
         name="Revenue teams at scaling B2B SaaS companies",
@@ -85,7 +105,7 @@ def run_full_analysis(company_input: dict[str, Any], mode: str) -> dict[str, Any
         market_context=demo_market_context,
         use_web_search=False,
     )
-    agent_output = generate_agent_output(
+    generated = generate_agent_output_with_warning(
         prompt,
         company,
         use_web_search=use_web_search,
@@ -95,8 +115,9 @@ def run_full_analysis(company_input: dict[str, Any], mode: str) -> dict[str, Any
 
     return {
         "status": "completed",
-        "agent_output": agent_output,
+        "agent_output": generated.output,
         "baseline_output": baseline_output,
+        "warning": generated.warning,
     }
 
 
@@ -172,23 +193,69 @@ def generate_agent_output(
     use_web_search: bool = False,
     fallback_prompt: str | None = None,
 ) -> dict[str, Any]:
-    raw_output = call_claude_json(prompt, use_web_search=use_web_search)
+    return _generate_agent_output(
+        prompt,
+        company,
+        use_web_search=use_web_search,
+        fallback_prompt=fallback_prompt,
+        fallback_on_validation_error=False,
+    ).output
+
+
+def generate_agent_output_with_warning(
+    prompt: str,
+    company: CompanyCreate,
+    use_web_search: bool = False,
+    fallback_prompt: str | None = None,
+) -> GeneratedAnalysis:
+    return _generate_agent_output(
+        prompt,
+        company,
+        use_web_search=use_web_search,
+        fallback_prompt=fallback_prompt,
+        fallback_on_validation_error=True,
+    )
+
+
+def _generate_agent_output(
+    prompt: str,
+    company: CompanyCreate,
+    use_web_search: bool,
+    fallback_prompt: str | None,
+    fallback_on_validation_error: bool,
+) -> GeneratedAnalysis:
+    raw_output = _safe_call_claude_json(prompt, use_web_search=use_web_search)
     if use_web_search and not raw_output:
-        return _generate_from_demo_market_fallback(fallback_prompt or prompt, company)
+        fallback = _generate_from_demo_market_fallback(
+            fallback_prompt or prompt,
+            company,
+            fallback_on_validation_error=fallback_on_validation_error,
+        )
+        return GeneratedAnalysis(fallback.output, fallback.warning or _empty_response_warning())
 
     if not raw_output:
-        return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
+        return _deterministic_fallback(company, _empty_response_warning())
 
     try:
-        return validate_agent_output(raw_output, company)
+        return GeneratedAnalysis(validate_agent_output(raw_output, company))
     except AgentOutputValidationError as first_error:
-        retry_output = call_claude_json(prompt, use_web_search=use_web_search)
+        retry_output = _safe_call_claude_json(prompt, use_web_search=use_web_search)
         if use_web_search and not retry_output:
-            return _generate_from_demo_market_fallback(fallback_prompt or prompt, company)
+            fallback = _generate_from_demo_market_fallback(
+                fallback_prompt or prompt,
+                company,
+                fallback_on_validation_error=fallback_on_validation_error,
+            )
+            return GeneratedAnalysis(
+                fallback.output,
+                fallback.warning or MALFORMED_CLAUDE_JSON_WARNING,
+            )
 
         try:
-            return validate_agent_output(retry_output, company)
+            return GeneratedAnalysis(validate_agent_output(retry_output, company))
         except AgentOutputValidationError as second_error:
+            if fallback_on_validation_error:
+                return _deterministic_fallback(company, MALFORMED_CLAUDE_JSON_WARNING)
             raise AgentOutputValidationError(
                 f"Agent output failed validation after retry: {second_error}"
             ) from first_error
@@ -201,21 +268,45 @@ def validate_agent_output(raw_output: dict[str, Any], company: CompanyCreate) ->
         raise AgentOutputValidationError(str(exc)) from exc
 
 
-def _generate_from_demo_market_fallback(prompt: str, company: CompanyCreate) -> dict[str, Any]:
-    raw_output = call_claude_json(prompt, use_web_search=False)
+def _generate_from_demo_market_fallback(
+    prompt: str,
+    company: CompanyCreate,
+    fallback_on_validation_error: bool = False,
+) -> GeneratedAnalysis:
+    raw_output = _safe_call_claude_json(prompt, use_web_search=False)
     if not raw_output:
-        return _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json")
+        return _deterministic_fallback(company, _empty_response_warning())
 
     try:
-        return validate_agent_output(raw_output, company)
+        return GeneratedAnalysis(validate_agent_output(raw_output, company))
     except AgentOutputValidationError as first_error:
-        retry_output = call_claude_json(prompt, use_web_search=False)
+        retry_output = _safe_call_claude_json(prompt, use_web_search=False)
         try:
-            return validate_agent_output(retry_output, company)
+            return GeneratedAnalysis(validate_agent_output(retry_output, company))
         except AgentOutputValidationError as second_error:
+            if fallback_on_validation_error:
+                return _deterministic_fallback(company, MALFORMED_CLAUDE_JSON_WARNING)
             raise AgentOutputValidationError(
                 f"Agent output failed validation after demo market fallback: {second_error}"
             ) from first_error
+
+
+def _safe_call_claude_json(prompt: str, use_web_search: bool = False) -> dict[str, Any]:
+    try:
+        return call_claude_json(prompt, use_web_search=use_web_search)
+    except Exception:
+        return {}
+
+
+def _deterministic_fallback(company: CompanyCreate, warning: str) -> GeneratedAnalysis:
+    return GeneratedAnalysis(
+        _deterministic_analysis(company, build_demo_market_context(company)).model_dump(mode="json"),
+        warning,
+    )
+
+
+def _empty_response_warning() -> str:
+    return MISSING_ANTHROPIC_KEY_WARNING if not settings.anthropic_api_key else UNAVAILABLE_CLAUDE_WARNING
 
 
 def generate_baseline(company_input: dict[str, Any], mode: str) -> dict[str, object]:

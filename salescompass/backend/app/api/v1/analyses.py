@@ -142,6 +142,7 @@ async def create_analysis(
     run.agent_output = result_data
     run.baseline_output = analysis["baseline_output"]
     run.action_plan = result_data.get("approach")
+    run.error_message = analysis.get("warning")
 
     db.commit()
     db.refresh(run)
