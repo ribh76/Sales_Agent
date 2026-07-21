@@ -1,0 +1,593 @@
+SALESCOMPASS MASTER DEVELOPMENT PLAN
+Version 2.0 — From 4-Day Prototype to Deployable Product
+
+ROADMAP CLASSIFICATION
+- MUST SHIP: Required before the first public release.
+- SHIP LATER: Planned post-launch functionality.
+- FOUNDATION: Technical cleanup required to support both releases.
+
+==================================================
+PART I — FIXING THE FOUNDATION
+==================================================
+
+PHASE 0: CODE CLEANUP AND STRUCTURAL DEBT
+Classification: FOUNDATION
+
+The project structure is already clean (backend / frontend / docs / reference).
+This phase targets internal rough edges identified in the codebase.
+
+1. Remove the duplicate AnthropicICPClient class in anthropic_client.py.
+   It is never called — all analysis goes through call_claude_json() directly.
+   Delete AnthropicICPClient and its imports to avoid confusion.
+
+2. Fix the model_name property on ICPRun. It currently always returns
+   the hardcoded string "deterministic-v1" regardless of whether Claude
+   ran or not. Add a model_name column to the icp_runs table (migration
+   0005) and populate it from settings.anthropic_model at run time.
+
+3. Rename the legacy feedback route. GET /feedback/{run_id} and
+   GET /analyses/{run_id}/feedback both exist and do the same thing.
+   Mark the /feedback/{run_id} alias as deprecated in the router and add
+   a comment noting it is slated for removal in the next major version.
+
+4. Consolidate the two CompanyUpdate and CompanyBase schemas.
+   CompanyUpdate duplicates every field from CompanyBase with the same
+   validators. Extract shared field definitions into a private mixin or
+   base and have both schemas inherit from it.
+
+5. Remove the empty plan.txt file in docs/. It is 0 bytes and committed
+   to the repo. Either fill it or delete it.
+
+6. Add a .env.example validation check. The current .env.example lists
+   SECRET_KEY without a minimum-length comment. Add a note that it must
+   be at least 32 characters, matching the pydantic Field constraint in
+   config.py, so new developers do not hit a cryptic startup error.
+
+7. Move the hardcoded database URL default out of config.py. The default
+   value "postgresql+psycopg://Sales_Compass_admin:ADMIN@localhost:5433/SalesCompass"
+   contains credentials and should be replaced with a placeholder that
+   fails loudly if DATABASE_URL is not set in the environment.
+
+8. Add a pyproject.toml entry for the backend package so that test
+   discovery and linting tools resolve imports consistently without
+   needing PYTHONPATH hacks. Verify pytest still finds all 11 test files.
+
+9. Review and tighten CORS config. The current cors_origins field is a
+   comma-separated string. Add a startup check that warns if the wildcard
+   "*" is present in production mode (is_production == True).
+
+10. Add a root-level Makefile with shortcuts for the most common commands:
+    make dev (docker compose up), make test (pytest), make migrate
+    (alembic upgrade head), and make lint (ruff or flake8 if added).
+
+
+==================================================
+
+PHASE 1: SEGMENT SCORING ENGINE REBUILD
+Classification: MUST SHIP
+
+The current deterministic scorer uses four hardcoded SegmentTemplate
+objects and simple keyword matching. It produces identical results for
+any two companies that share industry keywords. This is the single
+biggest quality problem in V1.
+
+1. Replace the four hardcoded SegmentTemplates with a configurable list
+   stored in a JSON or TOML file at backend/app/data/segments.json.
+   Each entry defines name, keywords, base scores, and weight hints.
+   This makes the scorer editable without touching Python.
+
+2. Expand the segment library from 4 entries to at least 12, covering
+   the most common early B2B ICP categories: B2B SaaS revenue teams,
+   operations / workflow, finance / reconciliation, healthcare, logistics,
+   legal / compliance, HR / people ops, real estate, manufacturing,
+   professional services, e-commerce / retail ops, and education / edtech.
+
+3. Add a TF-IDF-style relevance weight to keyword matching instead of
+   a flat +4 per hit. Common words like "software" should contribute less
+   than specific words like "reconciliation" or "churn."
+
+4. Incorporate the known_competitors field into scoring. If a competitor
+   maps to a known segment category, use that as a positive signal for
+   fit in that segment rather than ignoring it.
+
+5. Incorporate the early_leads and current_markets fields as first-class
+   signals in the deterministic scorer (they are currently only used in
+   the baseline service, not in analysis_pipeline.py).
+
+6. Add a confidence penalty when fewer than three of the five key input
+   fields (description, problem_solved, target_user_guess, past_clients,
+   average_ticket) are populated. Surface this as a "thin input" warning
+   on the results page.
+
+7. Write unit tests for the new scoring engine covering at least 6
+   fixture companies (2 history-mode, 2 no-history, 1 thin data, 1
+   competitor-led). Assert that segment rankings and confidence labels
+   are stable and sensible.
+
+8. Update the analysis_pipeline.py SEGMENTS import to load from the new
+   JSON config rather than the hardcoded dataclasses.
+
+
+==================================================
+
+PHASE 2: NO-HISTORY PATH WEB SEARCH PARITY
+Classification: MUST SHIP
+
+The no_history mode currently cannot use web search (_should_use_web_search
+returns False unless mode == "history"). This makes cold-start analysis
+almost entirely deterministic even when the Anthropic key is set.
+
+1. Remove the mode gate in _should_use_web_search. Both history and
+   no_history companies should be eligible for web search enrichment
+   when an Anthropic API key is configured.
+
+2. Update build_analysis_prompt to pass a different web search
+   instruction block for no_history mode: instead of searching for
+   customer pattern validation, instruct Claude to search for market size,
+   competitive landscape, and recent signals for the stated problem area.
+
+3. Add a fallback prompt for no_history + web search failure, using the
+   demo_market_data the same way history mode already does.
+
+4. Update the test in test_ai_services.py to cover the no_history +
+   web_search code path, asserting that fallback is triggered correctly
+   when the search returns nothing.
+
+5. Add a UI label on the results page that distinguishes between
+   "Live market research" (web search ran) and "Demo market context"
+   (fallback was used), so users understand the confidence basis.
+
+
+==================================================
+
+PHASE 3: DASHBOARD REBUILD
+Classification: MUST SHIP
+
+The current dashboard shows three stat cards and a flat table. There is
+nothing useful to return to after the first analysis. This phase makes
+the dashboard the default working surface.
+
+1. Add an aggregate confidence chart to the dashboard. Pull confidence
+   levels from past runs and render a simple bar or donut showing how
+   many were low / medium / high across all analyses.
+
+2. Add a "last recommended ICP" summary card that shows the ICP profile
+   string and top segment name from the most recent completed run, with
+   a link to that result.
+
+3. Add run filtering to the dashboard table: filter by status (completed,
+   failed, pending) and by mode (history, no_history). Use URL query
+   params so filters are shareable.
+
+4. Add pagination or infinite scroll to the analyses table. Right now
+   listAnalyses() fetches everything. Add limit and offset query params
+   to GET /analyses on the backend, and render pages of 10 on the
+   frontend.
+
+5. Add a quick-delete button on the dashboard table row with a
+   confirmation step. Wire it to DELETE /companies/{company_id} which
+   cascades to icp_runs via the existing SQLAlchemy relationship.
+
+6. Show the company name prominently as the row title. Currently it
+   falls back to "Analysis #N" when company name is missing. Ensure
+   the company join is always eager-loaded on list queries.
+
+7. Add a "runs this week" count to the stat cards section to replace
+   the nearly useless "Evaluation" card link (move that to the nav
+   sidebar instead).
+
+
+==================================================
+PART II — NEW FEATURES
+==================================================
+
+PHASE 4: OUTCOME TRACKING LOOP
+Classification: MUST SHIP
+
+This closes the biggest gap: the app has no way to record what actually
+happened after the analysis was used. Without this, it is a one-shot
+report generator rather than a learning system.
+
+1. Add an outcome column to the icp_runs table (migration 0006).
+   Values: null (not yet set), validated, invalidated, partially_validated.
+   Add an outcome_notes text column alongside it.
+
+2. Add a POST /analyses/{run_id}/outcome endpoint that accepts
+   { outcome, outcome_notes } and stores both. Gate it behind
+   authentication as a user-owned resource.
+
+3. Add an "Outcome" section to the results page, below the Human
+   Checkpoint. Show a simple three-option selector (Validated /
+   Partially validated / Invalidated) and a notes textarea. Only
+   show this section if the run is approved.
+
+4. When an outcome is submitted, pass it back as context to the
+   refinement prompt on future runs for the same company. Update
+   build_refine_prompt to accept an optional prior_outcomes parameter.
+
+5. Add outcome summary stats to the dashboard: X of Y completed runs
+   have outcomes recorded. This creates a visible nudge to close the loop.
+
+6. Write tests for the outcome endpoint covering the happy path, the
+   unauthenticated case, and the not-owned case.
+
+
+==================================================
+
+PHASE 5: LIVE COMPANY ENRICHMENT
+Classification: MUST SHIP
+
+The website field is collected in the form but never used in analysis.
+This phase wires it into the pipeline to auto-populate thin inputs.
+
+1. Add an enrichment_service.py in app/services/. Given a website URL,
+   call Claude with web_search enabled and a compact prompt asking for:
+   company stage, headcount estimate, tech stack signals, funding news,
+   and any recent press that indicates growth or pain.
+
+2. Add a POST /companies/{company_id}/enrich endpoint that triggers
+   enrichment and merges the results into the company record's
+   description, stage, and known_competitors fields. Return the updated
+   company profile.
+
+3. Call enrichment automatically inside create_analysis if the company
+   has a website set and the input_snapshot has fewer than 3 of the 5
+   key fields populated (thin input check from Phase 1).
+
+4. Add an "Enrich from website" button to the AnalyzeForm in the
+   frontend, appearing when the website field is non-empty. On click it
+   calls the enrich endpoint and merges the response into the form state.
+
+5. Show an "Auto-enriched" badge on the results page when enrichment
+   ran, so users know the analysis used website data rather than only
+   what they typed.
+
+6. Gate enrichment behind the ANTHROPIC_API_KEY check so it degrades
+   gracefully and never blocks the analysis pipeline.
+
+
+==================================================
+
+PHASE 6: ICP HYPOTHESIS VALIDATION TRACKER
+Classification: MUST SHIP
+
+The hypotheses_to_validate and questions_for_human fields are generated
+by Claude and rendered as static text. This phase turns them into a
+living checklist that feeds back into refinement.
+
+1. Add a hypothesis_states JSONB column to icp_runs (migration 0007).
+   Schema: list of { text, status: null | "confirmed" | "busted",
+   notes, updated_at }.
+
+2. Add a PATCH /analyses/{run_id}/hypotheses endpoint that accepts
+   { index, status, notes } and updates the relevant entry in
+   hypothesis_states.
+
+3. Replace the static hypothesis list on the results page with an
+   interactive checklist. Each item has a Confirm / Bust toggle and an
+   optional notes input. Changes call the PATCH endpoint immediately
+   (optimistic update, roll back on error).
+
+4. Update build_refine_prompt to include resolved hypotheses as a
+   section: "These hypotheses were previously confirmed: [...]. These
+   were busted: [...]." This makes re-runs meaningfully smarter.
+
+5. Add a hypothesis completion progress bar to the results page header:
+   "3 of 5 hypotheses resolved." This gives users a clear signal that
+   there is still work to do before the ICP is production-ready.
+
+6. Write tests for the PATCH endpoint covering status transitions and
+   ownership checks.
+
+
+==================================================
+
+PHASE 7: SEGMENT SCORING TRANSPARENCY
+Classification: MUST SHIP
+
+Users cannot currently see why a segment scored the way it did. The
+evidence list exists in the pipeline but is not surfaced richly in the UI.
+
+1. Update the SegmentScore schema to include a score_breakdown dict:
+   { base: int, keyword_bonus: int, history_bonus: int, acv_bonus: int,
+   stage_bonus: int, competitor_bonus: int }. Populate this in
+   _score_segments().
+
+2. Add the score_breakdown to the agent_output JSON stored in icp_runs
+   so the breakdown is retrievable without re-running scoring.
+
+3. Update SegmentScoreCard.tsx to show an expandable "Why this score?"
+   section that renders the breakdown as a small labeled bar chart or
+   annotated table.
+
+4. Add tooltip labels to the radar/bar chart in MarketScoresChart.tsx
+   explaining what each axis (size, access, ticket, cycle, competition)
+   means in plain English.
+
+5. Add a "What would improve this score?" hint below each segment card,
+   derived from the lowest-scoring dimension: e.g. "Reachability is low —
+   adding early leads or current markets would raise this segment's score."
+
+
+==================================================
+
+PHASE 8: ICP EVOLUTION TIMELINE
+Classification: SHIP LATER
+
+The database already stores every icp_run for a company, but the only
+way to compare them is to open each result individually.
+
+1. Add a GET /companies/{company_id}/runs endpoint that returns all
+   icp_runs for a company in chronological order, with a lightweight
+   summary projection: { run_id, created_at, status, icp_profile,
+   top_segment, confidence, outcome }.
+
+2. Build a CompanyTimelinePage at /companies/{company_id}/timeline in
+   the frontend. Render a vertical timeline with one card per run showing
+   the ICP profile, confidence badge, and outcome badge.
+
+3. Add a side-by-side diff view for any two selected runs: show the
+   recommended ICP profile, top segment, and confidence side by side
+   with a simple highlight on what changed.
+
+4. Add a "View timeline" link to each company row on the dashboard and
+   to the results page header.
+
+5. Write a migration (0008) that adds a company_slug column to companies
+   so the timeline URL can be /companies/my-company/timeline instead of
+   /companies/42/timeline.
+
+
+==================================================
+
+PHASE 9: OUTREACH SEQUENCE BUILDER
+Classification: SHIP LATER
+
+The action plan currently produces message_variations as static text.
+This phase turns it into a structured 3-step sequence.
+
+1. Extend the action plan JSON contract to include a sequences array:
+   [ { step: 1|2|3, type: "cold"|"followup"|"breakup", channel,
+   subject_line, message, send_after_days } ]. Update
+   build_action_plan_prompt to request this structure.
+
+2. Update ActionPlanResponse and the ActionPlanView frontend type to
+   include sequences.
+
+3. Build a SequenceBuilderCard component in the frontend that renders
+   the 3-step sequence as a visual funnel: Cold → Follow-up → Breakup.
+   Each card shows channel, subject (for email), timing, and message with
+   a copy button.
+
+4. Add a channel selector (Email / LinkedIn / Phone) per step. When the
+   user changes a channel, call POST /analyses/{run_id}/action-plan again
+   with a channel_hint parameter and re-render the sequence.
+
+5. Add a "Copy all as plain text" button that formats the full sequence
+   into a paste-ready block for use in a sales tool or Google Doc.
+
+
+==================================================
+
+PHASE 10: SHAREABLE READ-ONLY REPORT LINKS
+Classification: SHIP LATER
+
+Right now the only way to share analysis results is to give someone an
+account. This phase adds public read-only share links.
+
+1. Add a share_token column to icp_runs (migration 0009). It is a
+   URL-safe random 32-character token, generated on demand (not at
+   creation time), nullable.
+
+2. Add POST /analyses/{run_id}/share that generates and stores the token,
+   and returns the full share URL. Add DELETE /analyses/{run_id}/share to
+   revoke it.
+
+3. Add GET /share/{token} as a public (no-auth) endpoint that returns a
+   read-only projection of the run: ICP, markets, action plan, and
+   outcome. Omit input_snapshot and baseline internals.
+
+4. Build a /share/[token] page in the frontend. It renders the same
+   ResultsShell but with all interactive elements (approve, refine,
+   hypothesis toggles) hidden. Add a "Sign up to run your own analysis"
+   CTA at the bottom.
+
+5. Add a "Share" button to the results page that calls the share endpoint
+   and copies the link to the clipboard with a toast notification.
+
+6. Add an optional expiry_at field to the share token so users can set
+   a deadline after which the link stops working.
+
+
+==================================================
+
+PHASE 11: MULTI-USER TEAM WORKSPACES
+Classification: SHIP LATER
+
+Currently one user owns all their companies and runs. This phase adds
+basic team sharing without full RBAC.
+
+1. Add a workspaces table (migration 0010): id, name, owner_user_id,
+   created_at. Add a workspace_members table: workspace_id, user_id,
+   role (owner | member), invited_at, accepted_at.
+
+2. Add a workspace_id FK to companies (nullable for backward
+   compatibility with existing single-user data).
+
+3. Add workspace endpoints: POST /workspaces, GET /workspaces,
+   POST /workspaces/{id}/invite, POST /workspaces/{id}/accept.
+
+4. Update ownership checks in analyses.py and companies.py to allow
+   access when the requesting user is a member of the workspace that
+   owns the company.
+
+5. Add a Workspace settings page in the frontend where the owner can
+   invite members by email and see who has joined.
+
+6. Update the dashboard to show a workspace switcher in the nav sidebar
+   when the user belongs to more than one workspace.
+
+
+==================================================
+PART III — DEPLOYMENT AND SHIPPING
+==================================================
+
+PHASE 12: PRE-DEPLOYMENT HARDENING
+Classification: MUST SHIP
+
+1. Add rate limiting to the /analyses (POST) endpoint. Wrap it with a
+   Redis-backed counter: max 10 analysis runs per user per hour. Return
+   HTTP 429 with a Retry-After header when exceeded.
+
+2. Add structured logging throughout the backend. Replace bare print()
+   calls and silent except-pass blocks with Python logging calls at
+   appropriate levels (INFO for normal pipeline events, WARNING for
+   fallback triggers, ERROR for failures).
+
+3. Add a /api/v1/health/ready endpoint that checks both the Postgres
+   connection and Redis connection, returning 200 only when both are up.
+   Use this as the Render health check path instead of /api/v1/health.
+
+4. Set secure cookie flags for the JWT token if the frontend moves to
+   cookie-based auth instead of localStorage. At minimum, ensure the
+   token is not logged or exposed in error responses.
+
+5. Add a Content-Security-Policy header to the FastAPI middleware stack
+   for the production environment.
+
+6. Add input length caps to the text fields that feed directly into
+   LLM prompts (description, customer_history, problem_solved). Cap at
+   4000 characters each to prevent prompt injection via oversized inputs
+   and to control token costs.
+
+7. Run Bandit (Python security linter) against the backend and fix any
+   HIGH severity findings before deploying.
+
+8. Add a frontend environment validation on startup: if
+   NEXT_PUBLIC_API_URL is not set, throw a build-time error rather than
+   silently hitting localhost in production.
+
+9. Verify that DELETE /companies/{company_id} cascade-deletes icp_runs
+   and then feedback rows in the correct order. Write an integration test
+   that confirms no orphan rows remain after deletion.
+
+10. Add error boundary components in the Next.js frontend so that a
+    single card failure (e.g. a malformed action plan) does not blank the
+    entire results page.
+
+
+==================================================
+
+PHASE 13: STAGING DEPLOYMENT
+Classification: MUST SHIP
+
+1. Create a staging environment on Render using the existing render.yaml.
+   Add a second service block for staging (salescompass-backend-staging,
+   salescompass-frontend-staging) pointing to the same repo but a
+   different branch (staging or dev).
+
+2. Provision a staging Postgres instance and a staging Redis instance on
+   Render. Set DATABASE_URL and REDIS_URL as staging-specific env vars.
+
+3. Run alembic upgrade head against the staging database as part of the
+   Render build command, before uvicorn starts.
+
+4. Seed the staging database with the demo evaluation profiles using the
+   existing seed_eval_profiles.py script. Add a make seed-staging
+   Makefile shortcut.
+
+5. Run the full test suite against the staging backend after each deploy
+   using a GitHub Actions workflow triggered on push to the staging branch.
+
+6. Do a manual walkthrough of the full demo path on staging: register,
+   analyze, view results, approve, generate action plan, submit feedback,
+   run evaluation. Document any failures.
+
+7. Load test the analysis endpoint with 10 concurrent requests on staging
+   to verify run_in_threadpool does not saturate the single uvicorn
+   worker. Upgrade to multiple workers if needed.
+
+
+==================================================
+
+PHASE 14: PRODUCTION DEPLOYMENT
+Classification: MUST SHIP
+
+1. Create the production environment on Render. Set APP_ENV=production,
+   generate SECRET_KEY, and set ANTHROPIC_API_KEY. Do not copy the
+   staging database or seed data.
+
+2. Update render.yaml to add the alembic upgrade head build step for the
+   production backend service.
+
+3. Set CORS_ORIGINS in production to the exact frontend URL only (no
+   localhost, no wildcard).
+
+4. Configure the Render frontend service to pass NEXT_PUBLIC_API_URL
+   pointing to the production backend URL.
+
+5. Verify the /api/v1/health/ready endpoint returns 200 in production
+   before marking the deploy complete.
+
+6. Set up Render's auto-deploy on push to the main branch for both
+   services.
+
+7. Add a Sentry DSN (or equivalent) to both backend and frontend for
+   error tracking in production. Wire it to the FastAPI exception handler
+   and the Next.js error boundary.
+
+8. Create a short runbook in docs/RUNBOOK.md covering: how to roll back
+   a deploy, how to manually run migrations, how to clear the Redis
+   cache, and what to do if the Anthropic API key is revoked.
+
+9. Test the production share link flow end-to-end: create an analysis,
+   share it, open the link in an incognito window, verify it renders and
+   that no auth-only data is exposed.
+
+10. Announce V2. Write a short changelog in docs/CHANGELOG.md covering
+    everything shipped from Phase 1 through Phase 14.
+
+
+==================================================
+APPENDIX: PHASE DEPENDENCY MAP
+==================================================
+
+Phase 0  (cleanup)          → unlocks everything
+Phase 1  (scorer rebuild)   → Phase 4, Phase 7 depend on this
+Phase 2  (no-history search)→ Phase 5 (enrichment) depends on this
+Phase 3  (dashboard rebuild)→ Phase 4 (outcome) depends on this
+Phase 4  (outcomes)         → Phase 6 (hypothesis tracker), Phase 8 (timeline)
+Phase 5  (enrichment)       → Phase 9 (sequences) benefits from this
+Phase 6  (hypotheses)       → Phase 9 (sequences) benefits from this
+Phase 7  (transparency)     → standalone, no hard dependencies
+Phase 8  (timeline)         → requires Phase 4 outcome data to be useful
+Phase 9  (sequences)        → requires Phase 4 + Phase 6 for full value
+Phase 10 (share links)      → standalone, no hard dependencies
+Phase 11 (workspaces)       → requires Phase 10 to be meaningful in a team
+Phase 12 (hardening)        → must complete before Phase 13
+Phase 13 (staging)          → must complete before Phase 14
+Phase 14 (production)       → final gate
+
+
+==================================================
+QUICK REFERENCE: MUST SHIP VS SHIP LATER
+==================================================
+
+MUST SHIP (Phases 0-7, 12-14):
+  Phase 0   Code cleanup and structural debt
+  Phase 1   Segment scoring engine rebuild
+  Phase 2   No-history path web search parity
+  Phase 3   Dashboard rebuild
+  Phase 4   Outcome tracking loop
+  Phase 5   Live company enrichment
+  Phase 6   ICP hypothesis validation tracker
+  Phase 7   Segment scoring transparency
+  Phase 12  Pre-deployment hardening
+  Phase 13  Staging deployment
+  Phase 14  Production deployment
+
+SHIP LATER (Phases 8-11):
+  Phase 8   ICP evolution timeline
+  Phase 9   Outreach sequence builder
+  Phase 10  Shareable read-only report links
+  Phase 11  Multi-user team workspaces
